@@ -290,6 +290,133 @@ function updateSummaryBar(total, mine, waiting) {
   }
 }
 
+// ---------- Bloqueio de finalizacao com atendente atribuido ----------
+// Ao clicar no circulo de estado para finalizar uma conversa NAO resolvida
+// que tem atendente atribuido, a extensao segura o clique e mostra um aviso
+// pedindo para remover a atribuicao primeiro. Conversas sem atendente (ou
+// ja resolvidas, quando o clique reabre) passam normalmente.
+
+function getRowAssigneeName(row) {
+  const el = row.querySelector(ASSIGNEE_SELECTOR);
+  if (!el) return null;
+  const name = normalizeAssigneeText(el.textContent);
+  return name || null;
+}
+
+function closeResolveBlockModal() {
+  const el = document.getElementById("crisp-resolve-block");
+  if (el) el.remove();
+}
+
+function showResolveBlockModal(name) {
+  closeResolveBlockModal();
+
+  const overlay = document.createElement("div");
+  overlay.id = "crisp-resolve-block";
+
+  const box = document.createElement("div");
+  box.className = "crisp-resolve-block__box";
+
+  const title = document.createElement("h3");
+  title.textContent = "Conversa com atendente atribuido";
+
+  const msg = document.createElement("p");
+  msg.appendChild(document.createTextNode("Esta conversa esta atribuida a "));
+  const strong = document.createElement("strong");
+  strong.textContent = name;
+  msg.appendChild(strong);
+  msg.appendChild(document.createTextNode("."));
+
+  const msg2 = document.createElement("p");
+  msg2.textContent = "Remova a atribuicao do atendente para poder finaliza-la.";
+
+  const btn = document.createElement("button");
+  btn.textContent = "Entendi";
+  btn.addEventListener("click", closeResolveBlockModal);
+
+  box.appendChild(title);
+  box.appendChild(msg);
+  box.appendChild(msg2);
+  box.appendChild(btn);
+  overlay.appendChild(box);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeResolveBlockModal();
+  });
+
+  document.body.appendChild(overlay);
+}
+
+// Existem DOIS controles de finalizar conversa no Crisp:
+// 1) o circulo de estado na linha da lista (STATE_CIRCLE_SELECTOR)
+// 2) o botao "Nao resolvida"/"Resolver" no topo da conversa aberta
+//    (.c-conversation-box-topbar__state-button) - foi por esse segundo que
+//    o bloqueio escapou na v4.0.4, pois so cobriamos o primeiro.
+// O Crisp tambem pode executar a acao em mousedown/pointerdown (nao so no
+// click), entao interceptamos a cadeia inteira de eventos do mouse em fase
+// de captura.
+const TOPBAR_STATE_BUTTON_SELECTOR = ".c-conversation-box-topbar__state-button";
+
+function getActiveConversationRow() {
+  // A linha da conversa aberta no momento fica marcada como "--active" na
+  // lista lateral.
+  return document.querySelector(ROW_SELECTOR + " a.c-conversation-menu-item--active")
+    ?.closest(ROW_SELECTOR) || null;
+}
+
+function getOpenConversationAssigneeName() {
+  const row = getActiveConversationRow();
+  if (row) {
+    const name = getRowAssigneeName(row);
+    if (name) return name;
+  }
+  return null;
+}
+
+function handleResolveAttempt(ev) {
+  if (!ev.target || !ev.target.closest) return;
+
+  // Caso 1: circulo de estado na lista
+  const circle = ev.target.closest(STATE_CIRCLE_SELECTOR);
+  if (circle) {
+    const row = circle.closest(ROW_SELECTOR);
+    if (!row) return;
+    const anchor = row.querySelector("a.c-conversation-menu-item");
+    const isUnresolved = !!(anchor && anchor.className.indexOf("--unresolved") !== -1);
+    if (!isUnresolved) return;
+    const name = getRowAssigneeName(row);
+    if (!name) return;
+    blockAndWarn(ev, name);
+    return;
+  }
+
+  // Caso 2: botao "Nao resolvida" no topo da conversa aberta - so bloqueia
+  // quando o botao esta no estado vermelho (nao resolvida -> clicar
+  // finalizaria). Quando a conversa ja esta resolvida, o botao fica verde
+  // e o clique reabre, o que nunca deve ser bloqueado.
+  const topbarBtn = ev.target.closest(TOPBAR_STATE_BUTTON_SELECTOR);
+  if (topbarBtn) {
+    const isRed = topbarBtn.className.indexOf("c-base-button--red") !== -1;
+    if (!isRed) return;
+    const name = getOpenConversationAssigneeName();
+    if (!name) return;
+    blockAndWarn(ev, name);
+    return;
+  }
+}
+
+function blockAndWarn(ev, name) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  ev.stopImmediatePropagation();
+  if (!document.getElementById("crisp-resolve-block")) {
+    showResolveBlockModal(name);
+  }
+}
+
+for (const evType of ["pointerdown", "mousedown", "mouseup", "click", "touchstart"]) {
+  document.addEventListener(evType, handleResolveAttempt, true);
+}
+
 // ---------- Loop principal ----------
 
 function shutdownSelf() {

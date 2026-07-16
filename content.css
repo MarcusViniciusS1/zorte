@@ -137,3 +137,9 @@ svg.c-conversation-menu-item-headline__origin-icon--message_bubble_round {
   cursor: pointer;
   font-size: 13px;
 }
+
+/* Esconde o indicador de mencao (@) que fica preso na linha mesmo depois
+   de lida/resolvida - classe real do Crisp confirmada pelo usuario. */
+.c-conversation-menu-item-headline__mention {
+  display: none !important;
+}

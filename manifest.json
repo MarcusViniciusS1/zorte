@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Crisp - Etiqueta Ultima Mensagem do Cliente",
-  "version": "4.0.5",
-  "description": "Bloqueio de finalizacao agora cobre tambem o botao 'Nao resolvida' no topo da conversa aberta (antes so cobria o circulo da lista), mostrando o nome do atendente atribuido.",
+  "version": "4.0.6",
+  "description": "Esconde o indicador de mencao (@) que ficava preso na linha da conversa mesmo depois de resolvido.",
   "permissions": [
     "storage",
     "scripting"

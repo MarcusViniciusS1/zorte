@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Crisp - Etiqueta Ultima Mensagem do Cliente",
+  "version": "4.0.1",
+  "description": "Correcao: configuracoes salvas passam a valer imediatamente - script orfao se desliga e a extensao se reinjeta nas abas do Crisp apos atualizacao, sem precisar de F5.",
+  "permissions": [
+    "storage",
+    "scripting"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://app.crisp.chat/*",
+        "https://chat.crisp.chat/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "host_permissions": [
+    "https://app.crisp.chat/*",
+    "https://chat.crisp.chat/*"
+  ]
+}

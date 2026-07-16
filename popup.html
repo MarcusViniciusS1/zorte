@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Etiqueta Crisp</title>
+<style>
+  body {
+    width: 280px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+    padding: 0 14px 14px;
+    color: #222;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 -14px 12px;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #96141a, #e12328);
+  }
+  .brand img {
+    width: 26px;
+    height: 26px;
+    display: block;
+  }
+  .brand span {
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.2px;
+  }
+  h1 { font-size: 13px; margin: 0 0 10px; color: #444; font-weight: 600; }
+  .status {
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
+  .status.ok { background: #e6f6ec; color: #1c7c3a; }
+  .status.off { background: #f3f3f3; color: #666; }
+  label { display: block; margin-top: 10px; font-weight: 600; font-size: 12px; }
+  select {
+    width: 100%; box-sizing: border-box; padding: 6px 8px; margin-top: 4px;
+    border: 1px solid #ccc; border-radius: 6px; font-size: 12px; background: #fff;
+  }
+  input[type="color"] {
+    width: 100%; height: 32px; margin-top: 4px; border: 1px solid #ccc;
+    border-radius: 6px; padding: 2px;
+  }
+  button {
+    margin-top: 14px; width: 100%; padding: 8px; border: none; border-radius: 6px;
+    background: #1c64f2; color: white; font-weight: 600; cursor: pointer;
+  }
+  button.secondary {
+    margin-top: 6px; background: #eee; color: #333;
+  }
+  #saveStatus { margin-top: 8px; font-size: 12px; min-height: 16px; }
+  .hint { font-size: 11px; color: #777; margin-top: 6px; }
+  hr { border: none; border-top: 1px solid #eee; margin: 14px 0; }
+</style>
+</head>
+<body>
+  <div class="brand">
+    <img src="IMG/logo.png" alt="Logo" />
+    <span>Zorte <small id="version" style="font-weight:400;opacity:0.8;"></small></span>
+  </div>
+
+  <h1>Circulo de status - Crisp</h1>
+
+  <div id="status" class="status off">Verificando a aba atual...</div>
+
+  <label for="whoAmI">Quem e voce?</label>
+  <select id="whoAmI">
+    <option value="">Selecione...</option>
+    <option value="Marcus M">Marcus M</option>
+    <option value="Artur R">Artur R</option>
+    <option value="Nilo">Nilo</option>
+    <option value="Arthur F">Arthur F</option>
+    <option value="Felipe">Felipe</option>
+  </select>
+  <div class="hint">
+    Quando uma conversa estiver atribuida a voce, aparece a etiqueta azul
+    "🚨 Nome" ao lado do contato.
+  </div>
+
+  <hr />
+
+  <label for="waitingColor">Cor quando SEM retorno (cliente aguardando)</label>
+  <input type="color" id="waitingColor" />
+
+  <label for="answeredColor">Cor quando COM retorno (suporte ja respondeu)</label>
+  <input type="color" id="answeredColor" />
+
+  <hr />
+
+  <div class="hint">
+    Conversas sem retorno mostram quanto tempo falta da janela de 24h para
+    responder livremente (verde = tranquilo, amarelo = ate 6h, "✕" vermelho
+    = janela expirada). A deteccao de "sem retorno" agora usa o proprio
+    indicador nativo do Crisp, entao nao precisa mais de ajuste manual.
+  </div>
+
+  <button id="save">Salvar</button>
+  <button id="reload" class="secondary">Atualizar extensao</button>
+  <div id="saveStatus"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

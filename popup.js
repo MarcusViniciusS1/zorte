@@ -55,7 +55,11 @@ async function checkStatus() {
     }
     const response = await chrome.tabs.sendMessage(tab.id, { type: "CRISP_GET_STATUS" });
     if (response && response.detected) {
-      els.status.textContent = `Crisp detectado - ${response.totalRows} conversa(s) na tela, ${response.waitingCount} aguardando resposta do cliente.`;
+      let text = `Crisp detectado - ${response.totalRows} conversa(s) na tela, ${response.waitingCount} aguardando resposta do cliente.`;
+      if (response.unparsedTimeTexts && response.unparsedTimeTexts.length) {
+        text += ` ATENCAO - formatos de horario nao reconhecidos: ${response.unparsedTimeTexts.join(", ")}. Envie esses textos para o desenvolvedor.`;
+      }
+      els.status.textContent = text;
       els.status.className = "status ok";
     } else {
       els.status.textContent = "Crisp aberto, mas nenhuma conversa foi identificada ainda. Aguarde a lista carregar.";

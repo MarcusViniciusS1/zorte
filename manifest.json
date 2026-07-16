@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Crisp - Etiqueta Ultima Mensagem do Cliente",
-  "version": "4.0.1",
-  "description": "Correcao: configuracoes salvas passam a valer imediatamente - script orfao se desliga e a extensao se reinjeta nas abas do Crisp apos atualizacao, sem precisar de F5.",
+  "version": "4.0.3",
+  "description": "X e contagem da janela de 24h funcionam em qualquer ordenacao da lista (Mais Recentes ou Maior Tempo de Espera), em PT/EN/ES/FR/DE, com diagnostico no popup.",
   "permissions": [
     "storage",
     "scripting"

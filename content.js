@@ -38,6 +38,9 @@ const ROW_SELECTOR = ".c-conversation-menu-item-root";
 const ASSIGNEE_SELECTOR = ".c-conversation-menu-item-headline__assignee";
 const WAITING_SINCE_SELECTOR = ".c-conversation-menu-item-headline__waiting-since";
 const WAITING_SINCE_DATE_SELECTOR = ".c-conversation-menu-item-headline__waiting-since-date";
+// Quando a lista esta ordenada por "Mais Recentes", o Crisp mostra o tempo
+// de atualizacao (sem relogio) em vez do bloco "aguardando desde":
+const UPDATED_AT_SELECTOR = ".c-conversation-menu-item-headline__updated-at";
 
 // Caracteres invisiveis que o Crisp usa para preencher o texto truncado
 // (soft hyphen, zero-width space/joiner, Braille pattern blank, BOM).
@@ -138,35 +141,58 @@ function applyMineBadges() {
 // desde" (c-conversation-menu-item-headline__waiting-since-date), que so
 // existe quando a conversa esta de fato sem retorno.
 
+// Interpreta o horario relativo mostrado pelo Crisp. Suporta o Crisp em
+// portugues E em ingles (o texto varia conforme o idioma da interface de
+// cada operador - motivo pelo qual a contagem funcionava em uma maquina e
+// nao em outra).
+const RE_NOW = /^(agora|now|just now|ahora|maintenant|jetzt)$/i;
+const RE_TODAY = /^(hoje|today|hoy|aujourd'hui|heute)$/i;
+const RE_YESTERDAY = /^(ontem|yesterday|ayer|hier|gestern)$/i;
+const RE_WEEKDAY = /^((segunda|ter[cç]a|quarta|quinta|sexta|s[aá]bado|domingo)(-feira)?|monday|tuesday|wednesday|thursday|friday|saturday|sunday|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)$/i;
+const RE_DATE = /^\d{1,2}\.?\s(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez|feb|apr|may|aug|sep|oct|nov|dec|ene|dic|f[eé]vr?|avr|juin|juil|ao[uû]t|d[eé]c|m[aä]r|okt|dez)/i;
+
 function parseElapsedHours(rawText) {
   const t = (rawText || "").trim();
 
-  if (/^agora$/i.test(t)) return 0;
+  if (RE_NOW.test(t)) return 0;
 
-  let m = t.match(/^(\d{1,2})\s?(h|hs)$/i);
+  let m = t.match(/^(\d{1,2})\s?(h|hs|hr|hrs)$/i);
   if (m) return parseInt(m[1], 10);
 
-  m = t.match(/^(\d{1,2})\s?(min|m)$/i);
+  m = t.match(/^(\d{1,2})\s?(min|mins|m)$/i);
   if (m) return parseInt(m[1], 10) / 60;
 
-  if (/^hoje$/i.test(t)) return WINDOW_HOURS / 2;
+  if (RE_TODAY.test(t)) return WINDOW_HOURS / 2;
 
-  if (/^ontem$/i.test(t)) return WINDOW_HOURS + 6;
+  if (RE_YESTERDAY.test(t)) return WINDOW_HOURS + 6;
 
-  if (/^(segunda|ter[cç]a|quarta|quinta|sexta|s[aá]bado|domingo)(-feira)?$/i.test(t)) {
-    return WINDOW_HOURS + 24;
+  if (RE_WEEKDAY.test(t)) return WINDOW_HOURS + 24;
+
+  if (RE_DATE.test(t)) return WINDOW_HOURS + 24;
+
+  // formato desconhecido: registra para o diagnostico do popup
+  if (t) {
+    window.__crispTagUnparsed = window.__crispTagUnparsed || new Set();
+    window.__crispTagUnparsed.add(t);
   }
-
-  if (/^\d{1,2}\s(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/i.test(t)) {
-    return WINDOW_HOURS + 24;
-  }
-
   return null;
 }
 
 function applyCountdownBadge(row, waiting) {
-  const container = row.querySelector(WAITING_SINCE_SELECTOR);
-  const dateEl = row.querySelector(WAITING_SINCE_DATE_SELECTOR);
+  // Fonte do horario: bloco "aguardando desde" (ordenacao por tempo de
+  // espera) OU o horario simples "atualizado ha" (ordenacao por mais
+  // recentes). Nos dois casos, quando o cliente falou por ultimo, o valor
+  // corresponde ao momento da ultima mensagem dele; e um valor de 24h+
+  // significa janela expirada em qualquer cenario.
+  let container = row.querySelector(WAITING_SINCE_SELECTOR);
+  let dateEl = row.querySelector(WAITING_SINCE_DATE_SELECTOR);
+  if (!container || !dateEl) {
+    const updatedEl = row.querySelector(UPDATED_AT_SELECTOR);
+    if (updatedEl) {
+      container = updatedEl;
+      dateEl = updatedEl;
+    }
+  }
   const existing = row.querySelector(".crisp-countdown-badge");
 
   if (!container || !dateEl) {
@@ -344,7 +370,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.type === "CRISP_GET_STATUS") {
-    sendResponse(window.__crispTagLastStatus || { detected: false, totalRows: 0, waitingCount: 0 });
+    const status = window.__crispTagLastStatus || { detected: false, totalRows: 0, waitingCount: 0 };
+    status.unparsedTimeTexts = Array.from(window.__crispTagUnparsed || []);
+    status.version = (extensionAlive() && chrome.runtime.getManifest().version) || "?";
+    sendResponse(status);
   }
 });
 

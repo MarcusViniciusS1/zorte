@@ -59,11 +59,13 @@ a partir do horario que o proprio Crisp mostra na lista (ex: "14h" =
 - **Circulo vermelho com "✕":** a janela de 24h ja expirou (passe o mouse
   para ver o detalhe).
 
-A extensao reconhece os formatos de horario que o Crisp usa: minutos/horas
-("25m", "19h"), "Agora", "Hoje", "Ontem", nomes de dia da semana
-("terça-feira", "Domingo") e datas ("13 Jul"). Os formatos "Ontem", dia da
-semana e data sao sempre tratados como janela ja expirada (com certeza mais
-de 24h corridas).
+A extensao reconhece os formatos de horario que o Crisp usa em portugues e
+em ingles: minutos/horas ("25m", "19h", "3 hrs"), "Agora"/"now",
+"Hoje"/"Today", "Ontem"/"Yesterday", nomes de dia da semana ("terça-feira",
+"Monday") e datas ("13 Jul", "5 Aug"). Os formatos de ontem/dia da
+semana/data sao sempre tratados como janela ja expirada (com certeza mais
+de 24h corridas). Importante: o texto depende do idioma da interface de
+CADA operador - por isso e essencial esse suporte duplo.
 
 Essa contagem so aparece nas conversas marcadas como "sem retorno"
 (circulo colorido), porque so nesse caso o horario mostrado na lista
@@ -154,4 +156,3 @@ sincronizado pela conta Google se o Chrome Sync estiver ativado).
   nome (ex: "Artur" ou "Arthur") - names duplicados com o mesmo primeiro
   nome podem gerar falso positivo (nao e o caso da lista atual: Marcus,
   Artur, Nilo, Arthur e Felipe sao todos distintos).
-# zorte

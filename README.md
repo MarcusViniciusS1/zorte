@@ -1,168 +1,172 @@
-# Extensao Crisp: status por cor + atribuicao + janela de 24h
+# Crisp - Etiqueta Última Mensagem do Cliente
 
-Tres funcoes, todas detectadas localmente na tela do Crisp (sem nenhuma API
-externa):
+**Versão atual: 4.0.9**
 
-1. **Circulo de status:** recolore o botao de acao redondo de cada conversa
-   - cor personalizavel quando o cliente esta sem retorno do suporte, verde
-   quando o suporte ja respondeu.
-2. **Etiqueta "atribuido a mim":** quando a conversa esta marcada para o
-   operador que voce selecionou no popup, aparece uma etiqueta azul
-   clarinha "🚨 Nome" ao lado do nome do contato.
-3. **Janela de 24h:** para conversas sem retorno do suporte, mostra quanto
-   tempo ainda resta antes de nao ser mais possivel responder livremente
-   (regra comum em integracoes com WhatsApp) - verde, amarelo (ate 6h) ou
-   "janela expirada" em vermelho.
+Extensão do Chrome (Manifest V3) para uso da equipe da Zorte Tecnologia no
+`app.crisp.chat`. Toda a detecção é feita 100% pela interface (DOM) do
+Crisp — não usa a API do Crisp nem qualquer conexão externa.
 
-## Como funciona
+## O que a extensão faz atualmente
 
-- **Sem retorno / com retorno:** o Crisp tem uma classe propria,
-  `c-conversation-menu-item-headline__waiting-since`, que so aparece quando
-  a conversa esta mesmo aguardando resposta do suporte (com tooltip
-  "Aguardando desde: Xh"). A extensao usa esse indicador nativo diretamente
-  - nao depende mais de adivinhar por seta/icone de resposta.
-- **Atribuido a mim:** o Crisp marca o responsavel pela conversa com a
-  classe `c-conversation-menu-item-headline__assignee` (confirmada via
-  DevTools). A extensao le o nome ali, compara com o que voce selecionou em
-  "Quem e voce?" e, se bater, esconde o texto cinza nativo e coloca no lugar
-  a etiqueta azul "🚨 Nome".
+- **Círculo de status colorido:** o círculo de ação de cada conversa na
+  lista fica com uma cor personalizável quando o cliente ainda está sem
+  retorno do suporte, e outra cor (também personalizável) quando o suporte
+  já respondeu.
+- **Etiqueta "atribuído a mim":** ao escolher seu nome no menu da extensão
+  (Marcus M, Artur R, Nilo, Arthur F ou Felipe), as conversas atribuídas a
+  você ganham a etiqueta "🚨 {seu nome}" no lugar do texto nativo de
+  responsável.
+- **Janela de 24h para responder (estilo WhatsApp):** mostra quantas horas
+  faltam (só quando faltam menos de 5h e o cliente está aguardando) ou uma
+  bolinha vermelha com "✕" quando a janela de 24h já expirou (nesse caso
+  aparece para qualquer conversa parada há 24h+, não importa quem falou por
+  último). Funciona com o Crisp em português, inglês, espanhol, francês ou
+  alemão, e em qualquer ordenação da lista.
+- **Barra de resumo no topo da lista:** total de conversas, quantas estão
+  atribuídas a você e quantas estão aguardando retorno.
+- **Ícones de canal coloridos:** WhatsApp em verde oficial, chat do site em
+  azul Crisp.
+- **Esconde marcações de "@" presas:** remove o indicador de menção que
+  ficava preso na conversa mesmo depois de lida/resolvida.
+- **Bloqueio de finalização com atendente atribuído:** ao tentar finalizar
+  uma conversa (pelo círculo da lista ou pelo botão "Não resolvida" no topo
+  da conversa aberta) que ainda tem um atendente atribuído, mostra um aviso
+  com o nome da pessoa e só deixa finalizar depois de remover a atribuição.
+- **Etiqueta de empresa (segmento):** destaca em branco (borda + ícone 🏢) o
+  segmento/empresa do cliente, tanto na lista quanto no bloco "Segmentos de
+  conversa" da conversa aberta. Na conversa aberta também tem um botão de
+  copiar ao lado, que copia o nome exato da empresa para colar na busca do
+  sistema interno.
+- **Menu da extensão (popup):** mostra se a extensão está detectando o
+  Crisp na aba atual, a versão instalada, um botão "Atualizar extensão"
+  (recarrega os arquivos após um `git pull`) e um aviso único de "Atualizado
+  para a versão X" depois de uma atualização.
+- **Logo da Zorte** no topo do menu e como ícone da extensão (arquivo em
+  `IMG/logo.png`, substituível pela logo real).
 
-## Correcao de caracteres invisiveis (v2.5)
+## Instalar
 
-O Crisp preenche o texto do responsavel truncado com caracteres invisiveis
-(soft hyphen, zero-width space, "Braille pattern blank") para caber no
-espaco disponivel. A extensao agora remove esses caracteres antes de
-comparar o nome, e usa comparacao "comeca com" em vez de igualdade exata
-(pois nomes longos truncados, como "Joao Nilo" -> "Joao Nil.", nao ficam
-identicos ao nome completo).
-
-Alem disso, o texto que o Crisp mostra nem sempre e o apelido que a equipe
-usa. Por exemplo, o Crisp mostra "Joao" para quem a equipe chama de "Nilo" -
-a extensao ja sabe disso e faz a correspondencia certa por baixo dos panos,
-mas a etiqueta continua mostrando o apelido escolhido no popup ("🚨Nilo").
-
-Se algum outro colega tiver esse mesmo tipo de diferenca (apelido != nome
-que aparece no Crisp), me avise qual e o texto exato mostrado (copie o
-outerHTML do `<span class="c-conversation-menu-item-headline__assignee">`
-dele) que eu ajusto o mapeamento.
-
-## Janela de 24h para responder
-
-Em integracoes com WhatsApp, depois de 24h desde a ultima mensagem do
-cliente sem resposta do suporte, normalmente nao e mais possivel mandar
-mensagem livre (so modelos pre-aprovados). A extensao calcula esse prazo
-a partir do horario que o proprio Crisp mostra na lista (ex: "14h" =
-14 horas atras) e exibe uma etiqueta ao lado do horario:
-
-- **Nada aparece** enquanto ainda sobram 5h ou mais - sem poluicao visual.
-- **"Xh" (urgente):** faltando menos de 5h, mostra quantas horas restam.
-- **Circulo vermelho com "✕":** a janela de 24h ja expirou (passe o mouse
-  para ver o detalhe).
-
-A extensao reconhece os formatos de horario que o Crisp usa em portugues e
-em ingles: minutos/horas ("25m", "19h", "3 hrs"), "Agora"/"now",
-"Hoje"/"Today", "Ontem"/"Yesterday", nomes de dia da semana ("terça-feira",
-"Monday") e datas ("13 Jul", "5 Aug"). Os formatos de ontem/dia da
-semana/data sao sempre tratados como janela ja expirada (com certeza mais
-de 24h corridas). Importante: o texto depende do idioma da interface de
-CADA operador - por isso e essencial esse suporte duplo.
-
-Essa contagem so aparece nas conversas marcadas como "sem retorno"
-(circulo colorido), porque so nesse caso o horario mostrado na lista
-corresponde exatamente ao momento da ultima mensagem do cliente. Quando o
-suporte ja respondeu, o horario mostrado passa a ser o da resposta do
-suporte, entao nao da pra calcular a janela do cliente so pela lista.
-
-### Se algum chat nao ficar colorido (fica com a cor vermelha nativa do Crisp)
-
-Isso indica que o horario daquela linha veio num formato que a extensao
-ainda nao reconhece. Me avise qual texto de horario apareceu (ex: um nome
-de mes abreviado diferente, "amanha", etc.) que eu adiciono o formato.
-
-## Instalar no Chrome
-
-1. Extraia o `.zip` em uma pasta.
-2. Abra `chrome://extensions`.
-3. Ative "Modo do desenvolvedor" (canto superior direito).
-4. Clique em "Carregar sem compactacao" e selecione a pasta extraida (a que
-   tem o `manifest.json`).
-5. Abra o Crisp normalmente em `app.crisp.chat`.
+1. Baixe e extraia esta pasta em qualquer lugar do computador.
+2. Acesse `chrome://extensions`, ative o "Modo do desenvolvedor" (canto
+   superior direito).
+3. Clique em "Carregar sem compactação" e selecione a pasta extraída.
+4. Abra o `app.crisp.chat` normalmente - a extensão passa a atuar sozinha.
 
 ## Configurar
 
-Clique no icone da extensao na barra do Chrome:
+Clique no ícone da extensão na barra do Chrome para abrir o menu:
 
-- **Logo no topo:** identifica a extensao como sendo da Zorte.
-- **Quem e voce?** escolha seu nome (Marcus M, Artur R, Nilo, Arthur F ou
-  Felipe) para que as conversas atribuidas a voce ganhem a etiqueta azul.
-- **Cor sem retorno / com retorno:** personalize as cores do circulo de
-  acao.
-
-## Etiqueta de empresa
-
-O Crisp guarda a empresa do cliente como um "segmento". A extensao so
-destaca essa etiqueta (com o icone 🏢, usando a propria cor que o Crisp ja
-atribui ao segmento) tanto na lista de conversas quanto na conversa aberta
-(bloco "Segmentos de conversa" na barra lateral). Na conversa aberta tambem
-aparece um botao de copiar (📋) ao lado da etiqueta - ele copia o nome exato
-do segmento para a area de transferencia, para colar na busca do sistema
-interno.
-
-## Se algo aparecer errado
-
-A deteccao de "sem retorno" agora usa a classe nativa do Crisp
-(`c-conversation-menu-item-headline__waiting-since`), entao e bem mais
-estavel que a versao anterior baseada em icone/seta. Se mesmo assim algo
-aparecer errado (cor trocada, etiqueta faltando), me avise qual conversa e
-o que apareceu, com o outerHTML do elemento em questao (DevTools > botao
-direito > Inspecionar > Copy outerHTML) para eu corrigir com precisao.
-
-## Logo da empresa
-
-A logo exibida no topo do popup e carregada de `IMG/logo.png`. O arquivo
-atual e um placeholder - substitua-o pela logo real da empresa (mesmo nome
-de arquivo, formato PNG) e clique em "Atualizar extensao" no popup. Os
-icones da barra do Chrome ficam em `icons/` (icon16/48/128.png) e tambem
-podem ser substituidos pelos arquivos reais, mantendo os nomes e tamanhos.
-
-## Aviso de versao ao atualizar
-
-Ao clicar em "Atualizar extensao" (apos um `git pull`), a extensao rele os
-arquivos da pasta. Na proxima vez que o popup for aberto, ele mostra
-"Atualizado para a versao X.Y.Z" (uma unica vez) e a versao atual aparece
-sempre ao lado do nome, no topo.
+- **Quem é você?** escolha seu nome para ganhar a etiqueta de atribuição.
+- **Cor sem retorno / com retorno:** personalize as cores do círculo de
+  ação.
+- **Atualizar extensão:** usa depois de um `git pull`, sem precisar ir até
+  `chrome://extensions` recarregar manualmente.
 
 ## Atualizando via GitHub (git pull)
 
-Fluxo recomendado para o time:
+Cada colega clona/baixa esta pasta uma vez e carrega como extensão
+"descompactada". Quando sair uma versão nova:
 
-1. Publique esta pasta num repositorio (ex: GitHub privado da empresa).
-2. Cada colega clona o repositorio e, no `chrome://extensions`, carrega a
-   extensao "sem compactacao" apontando para a pasta clonada.
-3. Para atualizar: `git pull` na pasta e, em seguida, clique no botao
-   **"Atualizar extensao"** no popup da extensao - ele rele os arquivos da
-   pasta na hora, sem precisar abrir o gerenciador de extensoes.
-4. A partir da v4.0.1, nao e mais preciso dar F5: ao atualizar, a extensao
-   desliga o script antigo e reinjeta o novo automaticamente nas abas do
-   Crisp que estiverem abertas.
+1. Rode `git pull` na pasta.
+2. Clique em "Atualizar extensão" no menu da extensão.
 
-## Cada colega instala a sua propria copia
+A extensão detecta a mudança de versão sozinha e mostra um aviso confirmando
+para qual versão foi atualizada.
 
-Cada pessoa deve instalar a extensao no proprio Chrome (repita o passo
-"Instalar no Chrome" acima) e escolher o proprio nome no popup - a etiqueta
-azul so aparece para quem esta com o nome certo selecionado. As
-configuracoes ficam salvas localmente em cada navegador (chrome.storage,
-sincronizado pela conta Google se o Chrome Sync estiver ativado).
+## Se algo aparecer errado
 
-## Limitacoes
+Se alguma cor, etiqueta ou contagem aparecer errada em algum chat
+específico, me avise qual conversa e o que apareceu, com o outerHTML do
+elemento em questão (DevTools > botão direito > Inspecionar > Copy
+outerHTML) para eu corrigir com precisão - foi assim que resolvemos todos
+os ajustes até agora.
 
-- A deteccao de "sem retorno" e "atribuido a mim" usa classes reais do
-  Crisp, entao e estavel - mas se o Crisp renomear essas classes num
-  futuro update, a extensao para de funcionar ate eu atualizar os
-  seletores.
-- A extensao roda apenas com as paginas abertas (nao funciona em segundo
-  plano quando o Crisp esta fechado).
-- O casamento de nomes para a etiqueta "atribuido a mim" usa o primeiro
-  nome (ex: "Artur" ou "Arthur") - names duplicados com o mesmo primeiro
-  nome podem gerar falso positivo (nao e o caso da lista atual: Marcus,
-  Artur, Nilo, Arthur e Felipe sao todos distintos).
+## Limitações conhecidas
+
+- O atalho de teclado `Ctrl+Alt+R` para finalizar uma conversa não é
+  interceptado pelo bloqueio de finalização (só cobre clique do mouse).
+- A janela de 24h é uma aproximação baseada no horário que o próprio Crisp
+  mostra na lista (não há acesso direto ao timestamp exato da última
+  mensagem do cliente via DOM).
+- O mapeamento de nomes dos 5 operadores é fixo no código; se a equipe
+  mudar, precisa de um ajuste manual.
+- A logo em `IMG/logo.png` ainda é um placeholder - substitua pelo arquivo
+  real da logo da Zorte.
+
+## Histórico de atualizações
+
+- **4.0.9** - Corrige o botão de copiar da etiqueta de empresa: um seletor
+  genérico demais fazia o botão aparecer duplicado ou até dentro da caixa
+  de resposta de mensagens. Agora só atua nos dois lugares certos (lista e
+  "Segmentos de conversa"), com limpeza automática de qualquer sobra.
+- **4.0.8** - Etiqueta de empresa: depois de testar (e remover) uma versão
+  com nome/cor personalizáveis por clique - que acabou complicando o uso e
+  quebrando o layout com múltiplos segmentos - a versão final ficou mais
+  simples: etiqueta branca com ícone 🏢, botão de copiar com ícone fixo
+  (SVG, não depende de fonte de emoji do sistema) posicionado fora da
+  etiqueta para não sobrepor o "x" nativo de remover segmento.
+- **4.0.7** - Etiqueta de empresa (segmento) destacada com a cor do próprio
+  Crisp na lista e na conversa aberta, com botão de copiar o nome da
+  empresa.
+- **4.0.6** - Esconde o indicador de menção (@) que ficava preso na linha da
+  conversa mesmo depois de resolvida.
+- **4.0.5** - Bloqueio de finalização passou a cobrir também o botão "Não
+  resolvida" no topo da conversa aberta (antes só cobria o círculo da
+  lista).
+- **4.0.4** - Bloqueio de finalização: ao tentar finalizar uma conversa com
+  atendente atribuído, mostra um aviso com o nome e só permite finalizar
+  depois de remover a atribuição.
+- **4.0.3** - X vermelho e contagem da janela de 24h passam a funcionar em
+  qualquer ordenação da lista (Mais Recentes ou Maior Tempo de Espera).
+- **4.0.2** - Leitor de horário passa a suportar português, inglês,
+  espanhol, francês e alemão, com diagnóstico no popup para formatos ainda
+  não reconhecidos.
+- **4.0.1** - Corrige configurações que não valiam imediatamente após
+  salvar: o script órfão se desliga sozinho e a extensão se reinjeta nas
+  abas abertas do Crisp após uma atualização, sem precisar de F5.
+- **4.0.0** - Fechamento do ciclo 4.0: círculo de status, etiqueta de
+  atribuição (sirene 🚨), janela de 24h (urgente <5h e X expirado),
+  contadores no topo, cores por canal, botão "Atualizar extensão" com aviso
+  de versão, e logo em `IMG/logo.png`.
+- **3.9.0** - Botão "Atualizar extensão" no popup, para recarregar os
+  arquivos depois de um `git pull`.
+- **3.8.0** - X vermelho passa a aparecer para qualquer conversa parada há
+  24h ou mais, mesmo já respondida; a contagem urgente (<5h) fica só para
+  quem está aguardando.
+- **3.7.0** - Contagem regressiva só aparece faltando menos de 5h para
+  estourar a janela de 24h; quando expira, mostra X vermelho.
+- **3.6.0** - Etiqueta de atribuição passa a usar o emoji de sirene 🚨 (era
+  uma mãozinha 🤚🏻); corrige a contagem de 24h não zerando depois de responder.
+- **3.5.0** - Corrige a detecção de "sem retorno": passa a usar a setinha de
+  resposta na prévia da mensagem (sinal real de quem falou por último), em
+  vez do bloco "aguardando desde" que aparece em qualquer conversa não
+  resolvida.
+- **3.4.0** - Barra de contadores no topo da lista (total / minhas /
+  aguardando) e proteção contra o erro "extension context invalidated".
+- **3.3.0** - Linhas passam a ser localizadas pela classe real do Crisp
+  (corrige círculo sem cor); ícones de canal coloridos (WhatsApp verde,
+  chat azul).
+- **3.2.0** - Usa o seletor real do círculo de estado do Crisp (corrige a
+  etiqueta de contagem sendo pintada de amarelo por engano).
+- **3.1.0** - Etiqueta de contagem de 24h ganha paleta própria (fundo
+  escuro neutro), sem conflito visual com a cor do círculo de ação.
+- **3.0.0** - Passa a usar o indicador nativo "aguardando desde" do Crisp
+  para detectar conversas sem retorno (mais confiável que a heurística por
+  ícone usada até então).
+- **2.8.0** - Mostra quantas horas faltam (ou X vermelho se já expirou) da
+  janela de 24h para responder.
+- **2.7.0** - Contagem/expiração da janela de 24h passa a cobrir também
+  "Ontem", dias da semana e datas.
+- **2.6.0** - Primeira versão com a contagem regressiva da janela de 24h
+  para responder.
+- **2.5.0** - Corrige caracteres invisíveis no nome do responsável (o motivo
+  pelo qual a etiqueta de atribuição não batia para todos os operadores).
+- **2.4.0** - Substitui o texto nativo de responsável por uma etiqueta azul
+  clara quando a conversa está atribuída a você.
+- **2.3.0** - Primeira versão com a etiqueta de "atribuído a mim".
+- **2.2.0** - Passa a recolorir o círculo de ação de cada conversa (cor
+  personalizável sem retorno / verde com retorno), em vez de uma etiqueta
+  flutuante separada.
+- **2.1.0 / 2.0.0** - Primeiras versões: destacam a conversa quando a última
+  mensagem foi do cliente (por texto e por ícone de resposta), 100% via DOM,
+  sem uso da API do Crisp, com indicador de status e etiqueta personalizável.

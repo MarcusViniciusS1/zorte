@@ -417,6 +417,119 @@ for (const evType of ["pointerdown", "mousedown", "mouseup", "click", "touchstar
   document.addEventListener(evType, handleResolveAttempt, true);
 }
 
+// ---------- Etiqueta de empresa (segmento) + botao de copiar ----------
+// O Crisp guarda a "empresa" como um segmento/tag (.c-base-tag__label) e ja
+// atribui uma cor consistente por nome. So deixamos mais destacada (borda
+// na propria cor do segmento + icone) e, fora da lista (conversa aberta),
+// adicionamos um botao para copiar o nome. A personalizacao por clique foi
+// removida a pedido do usuario (ficou confusa/quebrou o layout).
+//
+// IMPORTANTE (bug corrigido na v4.0.9): ".c-base-tag__label" e uma classe
+// GENERICA usada pelo Crisp em varios lugares (inclusive dentro da caixa de
+// resposta/editor de mensagem), nao so nas etiquetas de empresa. Usar esse
+// seletor sozinho fazia o botao de copiar aparecer em lugares errados e,
+// como o navegador reexecuta o loop periodicamente, ate duplicar botoes.
+// Agora so procuramos labels DENTRO dos dois containers reais confirmados:
+// - Lista:           .c-conversation-menu-item-context__segments
+// - Conversa aberta: .c-conversation-profile-widget-segments (bloco
+//   "Segmentos de conversa" na barra lateral direita)
+const LIST_SEGMENTS_WRAPPER_SELECTOR = ".c-conversation-menu-item-context__segments";
+const CHAT_SEGMENTS_WRAPPER_SELECTOR = ".c-conversation-profile-widget-segments";
+const SEGMENT_LABEL_SELECTOR =
+  LIST_SEGMENTS_WRAPPER_SELECTOR + " .c-base-tag__label, " +
+  CHAT_SEGMENTS_WRAPPER_SELECTOR + " .c-base-tag__label";
+
+function isInsideListRow(el) {
+  return !!el.closest(LIST_SEGMENTS_WRAPPER_SELECTOR);
+}
+
+// Icones fixos em SVG (nao dependem de fonte de emoji do sistema - em
+// alguns Windows o emoji de prancheta/copiar renderiza como um icone de
+// documento generico em preto e branco, entao usamos SVG proprio).
+const COPY_ICON_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+const CHECK_ICON_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+async function copyCompanyName(name, btn) {
+  try {
+    await navigator.clipboard.writeText(name);
+  } catch (e) {
+    // fallback para paginas sem foco/permissao de clipboard
+    const ta = document.createElement("textarea");
+    ta.value = name;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e2) {}
+    ta.remove();
+  }
+  btn.innerHTML = CHECK_ICON_SVG;
+  btn.classList.add("crisp-copy-company-btn--done");
+  setTimeout(() => {
+    btn.innerHTML = COPY_ICON_SVG;
+    btn.classList.remove("crisp-copy-company-btn--done");
+  }, 1200);
+}
+
+function enhanceSegmentTags() {
+  const labels = document.querySelectorAll(SEGMENT_LABEL_SELECTOR);
+  const validButtons = new Set();
+
+  for (const label of labels) {
+    const raw = (label.textContent || "").replace(INVISIBLE_CHARS_RE, "").trim();
+    if (!raw) continue;
+
+    const tagEl = label.closest(".c-base-tag");
+    const inList = isInsideListRow(label);
+
+    if (tagEl) {
+      tagEl.classList.add(inList ? "crisp-company-tag--list" : "crisp-company-tag--chat");
+    }
+
+    if (inList || !tagEl) continue;
+
+    // Fora da lista = conversa aberta: botao de copiar. Inserido como
+    // IRMAO da propria etiqueta (.c-base-tag), fora do wrapper interno, para
+    // nao disputar espaco com o "x" nativo de remover segmento (que aparece
+    // por cima ao passar o mouse quando o botao fica dentro da etiqueta).
+    let btn = tagEl.nextElementSibling && tagEl.nextElementSibling.classList.contains("crisp-copy-company-btn")
+      ? tagEl.nextElementSibling
+      : null;
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "crisp-copy-company-btn";
+      btn.innerHTML = COPY_ICON_SVG;
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        copyCompanyName(btn.dataset.copyValue || raw, btn);
+      });
+      tagEl.insertAdjacentElement("afterend", btn);
+    }
+    btn.dataset.copyValue = raw;
+    btn.title = "Copiar \"" + raw + "\"";
+    validButtons.add(btn);
+  }
+
+  // Limpeza: remove qualquer botao de copiar duplicado ou que tenha parado
+  // em lugar errado (ex: dentro da caixa de resposta) - seja por bug de uma
+  // versao anterior, seja por sobra de reexecucoes do loop.
+  document.querySelectorAll(".crisp-copy-company-btn").forEach((btn) => {
+    if (!validButtons.has(btn)) btn.remove();
+  });
+
+  // Remove tambem qualquer classe de destaque que tenha ficado presa em
+  // etiquetas fora dos dois lugares certos.
+  document.querySelectorAll(".crisp-company-tag--list, .crisp-company-tag--chat").forEach((tagEl) => {
+    const insideList = !!tagEl.closest(LIST_SEGMENTS_WRAPPER_SELECTOR);
+    const insideChat = !!tagEl.closest(CHAT_SEGMENTS_WRAPPER_SELECTOR);
+    if (!insideList && !insideChat) {
+      tagEl.classList.remove("crisp-company-tag--list", "crisp-company-tag--chat");
+    }
+  });
+}
+
 // ---------- Loop principal ----------
 
 function shutdownSelf() {
@@ -445,6 +558,7 @@ function applyAll() {
   }
 
   applyMineBadges();
+  enhanceSegmentTags();
   updateSummaryBar(rows.length, mineCount, waitingCount);
 
   reportStatus(rows.length, waitingCount);

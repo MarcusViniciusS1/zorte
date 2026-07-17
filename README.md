@@ -98,6 +98,16 @@ Clique no icone da extensao na barra do Chrome:
 - **Cor sem retorno / com retorno:** personalize as cores do circulo de
   acao.
 
+## Etiqueta de empresa
+
+O Crisp guarda a empresa do cliente como um "segmento". A extensao so
+destaca essa etiqueta (com o icone 🏢, usando a propria cor que o Crisp ja
+atribui ao segmento) tanto na lista de conversas quanto na conversa aberta
+(bloco "Segmentos de conversa" na barra lateral). Na conversa aberta tambem
+aparece um botao de copiar (📋) ao lado da etiqueta - ele copia o nome exato
+do segmento para a area de transferencia, para colar na busca do sistema
+interno.
+
 ## Se algo aparecer errado
 
 A deteccao de "sem retorno" agora usa a classe nativa do Crisp

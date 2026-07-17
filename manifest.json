@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Crisp - Etiqueta Ultima Mensagem do Cliente",
-  "version": "4.0.6",
-  "description": "Esconde o indicador de mencao (@) que ficava preso na linha da conversa mesmo depois de resolvido.",
+  "version": "4.0.9",
+  "description": "Corrige bug do botao de copiar da etiqueta de empresa: estava usando um seletor generico demais e chegava a aparecer duplicado ou dentro da caixa de resposta. Agora so atua nos dois lugares reais (lista e Segmentos de conversa), com limpeza automatica de qualquer sobra.",
   "permissions": [
     "storage",
     "scripting"

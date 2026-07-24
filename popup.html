@@ -2,75 +2,80 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8" />
-<title>Etiqueta Crisp</title>
+<title>Zorte · Crisp</title>
 <style>
   body {
-    width: 280px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: 13px;
-    padding: 0 14px 14px;
-    color: #222;
+    width: 300px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 0 16px 16px;
+    color: #14181f;
+    margin: 0;
+    background: #fff;
   }
   .brand {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 -14px 12px;
-    padding: 12px 14px;
+    display: flex; align-items: center; gap: 9px;
+    margin: 0 -16px 14px; padding: 13px 16px;
     background: linear-gradient(135deg, #96141a, #e12328);
   }
-  .brand img {
-    width: 26px;
-    height: 26px;
-    display: block;
+  .brand img { width: 28px; height: 28px; display: block; object-fit: contain; }
+  .brand span { color: #fff; font-weight: 700; font-size: 15px; letter-spacing: 0.2px; }
+  .brand small { font-weight: 500; opacity: 0.9; }
+
+  h1 {
+    font-size: 13px; margin: 16px 0 10px; color: #0d1117; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em;
   }
-  .brand span {
-    color: #fff;
-    font-weight: 700;
-    font-size: 13px;
-    letter-spacing: 0.2px;
-  }
-  h1 { font-size: 13px; margin: 0 0 10px; color: #444; font-weight: 600; }
-  .status {
-    padding: 10px;
-    border-radius: 8px;
-    font-size: 12px;
-    margin-bottom: 12px;
-  }
-  .status.ok { background: #e6f6ec; color: #1c7c3a; }
-  .status.off { background: #f3f3f3; color: #666; }
-  label { display: block; margin-top: 10px; font-weight: 600; font-size: 12px; }
+  .status { padding: 11px; border-radius: 8px; font-size: 13px; margin-bottom: 6px; }
+  .status.ok { background: #dff5e6; color: #146c33; }
+  .status.off { background: #eef0f3; color: #3a4149; }
+
+  label { display: block; margin-top: 12px; font-weight: 600; font-size: 13px; color: #1c2530; }
   select {
-    width: 100%; box-sizing: border-box; padding: 6px 8px; margin-top: 4px;
-    border: 1px solid #ccc; border-radius: 6px; font-size: 12px; background: #fff;
+    width: 100%; box-sizing: border-box; padding: 8px 9px; margin-top: 5px;
+    border: 1px solid #9aa4b2; border-radius: 6px; font-size: 14px; background: #fff; color: #14181f;
   }
   input[type="color"] {
-    width: 100%; height: 32px; margin-top: 4px; border: 1px solid #ccc;
-    border-radius: 6px; padding: 2px;
+    width: 100%; height: 34px; margin-top: 5px; border: 1px solid #9aa4b2;
+    border-radius: 6px; padding: 2px; cursor: pointer;
   }
-  button {
-    margin-top: 14px; width: 100%; padding: 8px; border: none; border-radius: 6px;
-    background: #1c64f2; color: white; font-weight: 600; cursor: pointer;
+  .btn {
+    margin-top: 12px; width: 100%; padding: 10px; border: none; border-radius: 6px;
+    font-weight: 700; cursor: pointer; font-size: 14px;
   }
+  .btn-primary { background: #1552d6; color: #fff; }
+  .btn-primary:hover { background: #1145b8; }
+  .btn-outline { background: #f3f5f8; border: 1px solid #9aa4b2; color: #263241; }
+  .btn-outline:hover { background: #e7ebf1; }
   button.secondary {
-    margin-top: 6px; background: #eee; color: #333;
+    margin-top: 8px; width: 100%; padding: 9px; border: 1px solid #cdd4dd; border-radius: 6px;
+    background: #eef0f3; color: #263241; font-weight: 600; cursor: pointer; font-size: 13px;
   }
-  #saveStatus { margin-top: 8px; font-size: 12px; min-height: 16px; }
-  .hint { font-size: 11px; color: #777; margin-top: 6px; }
-  hr { border: none; border-top: 1px solid #eee; margin: 14px 0; }
+  button.secondary:hover { background: #e2e6ec; }
+
+  .hidden { display: none !important; }
+  .message { font-size: 13px; margin-top: 8px; font-weight: 600; text-align: center; }
+  .error-msg { color: #c62828; }
+  .success-msg { color: #146c33; }
+
+  .hint { font-size: 12px; color: #55606d; margin-top: 7px; }
+  hr { border: none; border-top: 1px solid #e3e7ec; margin: 16px 0; }
+  #saveStatus { margin-top: 8px; font-size: 13px; min-height: 16px; text-align: center; font-weight: 600; }
 </style>
 </head>
 <body>
   <div class="brand">
-    <img src="IMG/logo.png" alt="Logo" />
-    <span>Zorte <small id="version" style="font-weight:400;opacity:0.8;"></small></span>
+    <img src="logo.png" alt="Zorte" />
+    <span>Zorte <small id="version"></small></span>
   </div>
 
-  <h1>Circulo de status - Crisp</h1>
+  <!-- ===== Lista de conversas (topo) ===== -->
+  <h1>Lista de conversas</h1>
 
   <div id="status" class="status off">Verificando a aba atual...</div>
 
-  <label for="whoAmI">Quem e voce?</label>
+  <label for="whoAmI">Quem é você?</label>
   <select id="whoAmI">
     <option value="">Selecione...</option>
     <option value="Marcus M">Marcus M</option>
@@ -80,29 +85,27 @@
     <option value="Felipe">Felipe</option>
   </select>
   <div class="hint">
-    Quando uma conversa estiver atribuida a voce, aparece a etiqueta azul
+    Quando uma conversa estiver atribuída a você, aparece a etiqueta
     "🚨 Nome" ao lado do contato.
   </div>
-
-  <hr />
 
   <label for="waitingColor">Cor quando SEM retorno (cliente aguardando)</label>
   <input type="color" id="waitingColor" />
 
-  <label for="answeredColor">Cor quando COM retorno (suporte ja respondeu)</label>
+  <label for="answeredColor">Cor quando COM retorno (suporte já respondeu)</label>
   <input type="color" id="answeredColor" />
+
+  <button id="save" class="btn btn-primary">Salvar nome e cores</button>
 
   <hr />
 
-  <div class="hint">
-    Conversas sem retorno mostram quanto tempo falta da janela de 24h para
-    responder livremente (verde = tranquilo, amarelo = ate 6h, "✕" vermelho
-    = janela expirada). A deteccao de "sem retorno" agora usa o proprio
-    indicador nativo do Crisp, entao nao precisa mais de ajuste manual.
+  <!-- ===== Ações gerais (rodapé) ===== -->
+  <button id="btn-test-conn" class="btn btn-outline">Testar Conexão com Banco</button>
+  <div id="test-container" class="hidden">
+    <div id="test-message" class="message"></div>
   </div>
 
-  <button id="save">Salvar</button>
-  <button id="reload" class="secondary">Atualizar extensao</button>
+  <button id="reload" class="secondary">Atualizar extensão</button>
   <div id="saveStatus"></div>
 
   <script src="popup.js"></script>

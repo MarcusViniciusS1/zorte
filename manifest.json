@@ -1,45 +1,56 @@
 {
   "manifest_version": 3,
-  "name": "Crisp - Etiqueta Ultima Mensagem do Cliente",
-  "version": "4.0.9",
-  "description": "Corrige bug do botao de copiar da etiqueta de empresa: estava usando um seletor generico demais e chegava a aparecer duplicado ou dentro da caixa de resposta. Agora so atua nos dois lugares reais (lista e Segmentos de conversa), com limpeza automatica de qualquer sobra.",
+  "name": "Zorte Crisp — Atendimento e Etiquetas",
+  "version": "5.3.4",
+  "description": "Unificação: etiquetas/indicadores na lista do Crisp (status, atribuição, janela 24h, contadores, canal, empresa) + validação de empresa no sistema interno e registro de atendimento pelo painel lateral.",
   "permissions": [
     "storage",
-    "scripting"
+    "scripting",
+    "activeTab",
+    "sidePanel"
   ],
-  "content_scripts": [
-    {
-      "matches": [
-        "https://app.crisp.chat/*",
-        "https://chat.crisp.chat/*"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "css": [
-        "content.css"
-      ],
-      "run_at": "document_idle"
-    }
+  "host_permissions": [
+    "https://app.crisp.chat/*",
+    "https://chat.crisp.chat/*",
+    "http://localhost:3001/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
     "default_popup": "popup.html",
+    "default_title": "Zorte Crisp",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "logo.png",
+      "48": "logo.png",
+      "128": "logo.png"
     }
   },
   "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+    "16": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
   },
-  "host_permissions": [
-    "https://app.crisp.chat/*",
-    "https://chat.crisp.chat/*"
+  "side_panel": {
+    "default_path": "drawer.html"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["drawer.html", "drawer.js"],
+      "matches": ["https://app.crisp.chat/*"]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://app.crisp.chat/*", "https://chat.crisp.chat/*"],
+      "js": ["crisp-ui.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://app.crisp.chat/*"],
+      "js": ["cnpj-scanner.js", "tenant.js"],
+      "run_at": "document_idle"
+    }
   ]
 }

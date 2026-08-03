@@ -17,7 +17,8 @@ const OPERATOR_MATCH_TOKENS = {
   "Artur R": "Artur",
   "Nilo": "João",
   "Arthur F": "Arthur",
-  "Felipe": "Felipe"
+  "Felipe": "Felipe",
+  "Daniely Pavan": "Daniely"
 };
 
 const els = {

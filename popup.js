@@ -5,29 +5,12 @@
 // (O "Validar Atendimento" foi removido daqui — agora fica dentro do painel
 //  lateral / drawer.)
 
-<<<<<<< HEAD
-const DEFAULTS = {
-  waitingColor: "#FFC107",
-  answeredColor: "#2ecc71",
-  myDisplayName: "",
-  myMatchToken: ""
-};
-
-const OPERATOR_MATCH_TOKENS = {
-  "Marcus M": "Marcus",
-  "Artur R": "Artur",
-  "Nilo": "João",
-  "Arthur F": "Arthur",
-  "Felipe": "Felipe",
-  "Daniely Pavan": "Daniely"
-=======
 // myDisplayName/myMatchToken (usados pelo crisp-ui.js pra etiqueta "🚨 Nome")
 // não são mais escolhidos aqui — background.js grava eles automaticamente
 // a partir de quem loga (ver ação "login").
 const DEFAULTS = {
   waitingColor: "#FFC107",
   answeredColor: "#2ecc71",
->>>>>>> a65ab4e (Ajuste geral)
 };
 
 const els = {
@@ -38,9 +21,6 @@ const els = {
   saveStatus: document.getElementById("saveStatus"),
   btnTestConn: document.getElementById("btn-test-conn"),
   testContainer: document.getElementById("test-container"),
-<<<<<<< HEAD
-  testMessage: document.getElementById("test-message")
-=======
   testMessage: document.getElementById("test-message"),
   loginSection: document.getElementById("loginSection"),
   loginEmail: document.getElementById("loginEmail"),
@@ -51,7 +31,6 @@ const els = {
   loggedName: document.getElementById("loggedName"),
   logoutLink: document.getElementById("logoutLink"),
   popupContent: document.getElementById("popupContent"),
->>>>>>> a65ab4e (Ajuste geral)
 };
 
 // ---- Login (obrigatório) ----
@@ -104,11 +83,6 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
-<<<<<<< HEAD
-  const myDisplayName = els.whoAmI.value;
-  const myMatchToken = myDisplayName ? (OPERATOR_MATCH_TOKENS[myDisplayName] || myDisplayName.split(" ")[0]) : "";
-=======
->>>>>>> a65ab4e (Ajuste geral)
   const payload = {
     waitingColor: els.waitingColor.value || DEFAULTS.waitingColor,
     answeredColor: els.answeredColor.value || DEFAULTS.answeredColor

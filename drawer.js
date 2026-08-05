@@ -10,8 +10,6 @@ const $ = (id) => document.getElementById(id);
 // precisa agir conforme o caso.
 const EMBEDDED = window.self !== window.top;
 function dismiss(type, extra) {
-<<<<<<< HEAD
-=======
   // Avisa o background que o painel NATIVO fechou (ver "drawerOpen" em
   // background.js) — é o que permite o atalho Ctrl+\ saber se deve abrir ou
   // fechar. O fallback embutido (iframe) não entra nessa contagem: quem
@@ -20,15 +18,12 @@ function dismiss(type, extra) {
   if (!EMBEDDED) {
     try { chrome.runtime.sendMessage({ action: 'drawerClosed' }).catch(() => {}); } catch (e) {}
   }
->>>>>>> a65ab4e (Ajuste geral)
   if (EMBEDDED) {
     try { window.parent.postMessage({ source: 'zt-drawer', type: type || 'close', ...(extra || {}) }, '*'); } catch (e) {}
   } else {
     window.close();
   }
 }
-<<<<<<< HEAD
-=======
 if (!EMBEDDED) {
   try { chrome.runtime.sendMessage({ action: 'drawerOpened' }).catch(() => {}); } catch (e) {}
 }
@@ -59,7 +54,6 @@ if (chrome.tabs && chrome.tabs.onActivated) {
   });
 }
 closeIfTabIsNotCrisp(); // checagem já na abertura (ex.: aberto via fallback numa aba errada)
->>>>>>> a65ab4e (Ajuste geral)
 
 // ---- Ponte com o background ----
 function send(action, extra) {
@@ -71,8 +65,6 @@ function send(action, extra) {
   });
 }
 
-<<<<<<< HEAD
-=======
 // ---- Login (obrigatório) ----
 // Gate simples: enquanto não autenticado, mostra só o form de login e
 // esconde o resto (#appContent) — o resto do arquivo continua carregando
@@ -844,7 +836,6 @@ async function loadModules() {
   if (pendingModuleIds) renderCompanyModuleChips(pendingModuleIds);
 }
 
->>>>>>> a65ab4e (Ajuste geral)
 function showError(text) {
   const el = $('error');
   if (!text) { el.style.display = 'none'; el.textContent = ''; el.className = 'error'; return; }
@@ -904,13 +895,8 @@ function clearCompany() {
 function selectCompany(c) {
   if (!c || !c.id) return;
   companyId = c.id;
-<<<<<<< HEAD
-  $('companyChipName').textContent =
-    c.name + (c.tenant ? ` · ${c.tenant}` : c.document ? ` · CNPJ ${c.document}` : '');
-=======
   const detalhes = [c.tenant, c.document ? `CNPJ ${c.document}` : null].filter(Boolean);
   $('companyChipName').textContent = c.name + (detalhes.length ? ` · ${detalhes.join(' · ')}` : '');
->>>>>>> a65ab4e (Ajuste geral)
   $('companyChip').style.display = 'flex';
   $('company').style.display = 'none';
   $('companyList').style.display = 'none';
@@ -931,8 +917,6 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
         msg.className = 'validate-msg ok';
       }
     }
-<<<<<<< HEAD
-=======
     // Mesmo aviso também preenche sozinho a aba "Módulos", se ainda não tiver
     // empresa selecionada lá (busca manual independente da aba Criar).
     if (request && request.action === 'cnpjMatchFound' && request.company && !moduleCompanyId) {
@@ -953,7 +937,6 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
       clearModuleCompany();
       send('getContext', {}).then((r) => { lastContext = r; applyContext(r, { fillCompany: true }); });
     }
->>>>>>> a65ab4e (Ajuste geral)
   });
 }
 
@@ -999,10 +982,7 @@ function applyContext(r, { fillCompany }) {
     if (!$('subject').value.trim()) $('subject').value = `Atendimento - ${ex.name}`;
   }
   if (ex.phone && !$('phone').value) $('phone').value = maskPhone(ex.phone);
-<<<<<<< HEAD
-=======
   if (ex.email && !$('email').value) $('email').value = ex.email;
->>>>>>> a65ab4e (Ajuste geral)
   if (ex.url && !$('url').value) $('url').value = ex.url;
   // Canal/origem detectado (Chat, WhatsApp...): só na abertura, para não
   // sobrescrever uma escolha manual do usuário numa revalidação.
@@ -1016,13 +996,6 @@ function applyContext(r, { fillCompany }) {
       document: r.data.document || r.data.documento,
       tenant: r.data.tenant,
     });
-<<<<<<< HEAD
-  }
-}
-
-// Ao abrir o painel, puxa o contexto da conversa atual.
-send('getContext', {}).then((r) => applyContext(r, { fillCompany: true }));
-=======
     renderSearchResult(r.data);
   }
 }
@@ -1068,7 +1041,6 @@ let lastContext = null;
 
 // Ao abrir o painel, puxa o contexto da conversa atual.
 send('getContext', {}).then((r) => { lastContext = r; applyContext(r, { fillCompany: true }); });
->>>>>>> a65ab4e (Ajuste geral)
 
 // ---- Card de resultado da busca (Nome / Tenant / CNPJ / Cliente Novo) ----
 function hideSearchResult() {
@@ -1108,10 +1080,7 @@ $('validate').addEventListener('click', async () => {
   hideSearchResult();
   setValidating(true);
   const r = await send('getContext', {});
-<<<<<<< HEAD
-=======
   lastContext = r;
->>>>>>> a65ab4e (Ajuste geral)
   setValidating(false);
   if (!r || !r.ok) {
     msg.textContent = r && r.error === 'not-crisp'
@@ -1138,8 +1107,6 @@ $('validate').addEventListener('click', async () => {
   }
 });
 
-<<<<<<< HEAD
-=======
 // ---- Resumir com IA (Gemini) ----
 // Lê as mensagens de HOJE direto do HTML da conversa aberta no Crisp (via
 // tenant.js) e preenche os campos do ticket — não fala com a API do Crisp,
@@ -1332,7 +1299,6 @@ $('createContactBtn').addEventListener('click', async () => {
   }
 });
 
->>>>>>> a65ab4e (Ajuste geral)
 // ---- Prioridade (SLA) + prazo sugerido ----
 // Espelha frontend/src/lib/sla.ts (a extensão não pode importar módulos TS).
 const SLA_HOURS = { urgente: 4, alta: 24, media: 48, baixa: 72 };
@@ -1561,14 +1527,6 @@ $('tagInput').addEventListener('keydown', (e) => {
 });
 
 // ---- Atendentes ----
-<<<<<<< HEAD
-send('getAttendants', {}).then((r) => {
-  if (!r || !r.ok) return;
-  const list = (r.data && r.data.data) || [];
-  const sel = $('attendant');
-  for (const a of list) {
-    if (a.active === false) continue;
-=======
 // O campo já vem preenchido com quem está logado (sabemos o id exato — não
 // precisa mais casar nome por aproximação), mas continua editável: trocar
 // aqui vale só para o ticket atual.
@@ -1580,16 +1538,12 @@ Promise.all([
   const list = ((r.data && r.data.data) || []).filter((a) => a.active !== false);
   const sel = $('attendant');
   for (const a of list) {
->>>>>>> a65ab4e (Ajuste geral)
     const opt = document.createElement('option');
     opt.value = a.id;
     opt.textContent = a.name;
     sel.appendChild(opt);
   }
-<<<<<<< HEAD
-=======
   if (zt_attendant && list.some((a) => a.id === zt_attendant.id)) sel.value = zt_attendant.id;
->>>>>>> a65ab4e (Ajuste geral)
 });
 
 // ---- Fechar (fecha o painel lateral) ----
@@ -1623,10 +1577,7 @@ $('form').addEventListener('submit', async (e) => {
     channel: $('canal').value,
     company_id: companyId || null,
     attendant_id: $('attendant').value || null,
-<<<<<<< HEAD
-=======
     created_by: myAttendantId || null,
->>>>>>> a65ab4e (Ajuste geral)
     priority: $('priority').value,
     due_date: fromInputValue($('dueDate').value),
     tags: selectedTags,

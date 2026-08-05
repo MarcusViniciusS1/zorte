@@ -17,27 +17,6 @@
       display: flex; flex-direction: column; height: 100%;
     }
     header {
-<<<<<<< HEAD
-      display: flex; align-items: center; justify-content: space-between; gap: 8px;
-      padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
-    }
-    header h1 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
-    header p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
-    .close {
-      background: transparent; border: 0; color: var(--muted); cursor: pointer;
-      font-size: 20px; line-height: 1; padding: 6px; border-radius: 8px;
-    }
-    .close:hover { background: rgba(255,255,255,.06); color: var(--text); }
-    form { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-    .field { display: flex; flex-direction: column; gap: 5px; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    label { font-size: 12px; font-weight: 600; color: var(--muted); }
-    input, select, textarea {
-      width: 100%; background: var(--card); border: 1px solid var(--border);
-      color: var(--text); border-radius: 9px; padding: 9px 11px; font: inherit; outline: none;
-    }
-    input:focus, select:focus, textarea:focus { border-color: var(--primary); }
-=======
       position: relative; display: flex; align-items: center; justify-content: flex-end; gap: 8px;
       padding: 2px 8px 2px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0;
     }
@@ -57,7 +36,6 @@
     }
     input:focus, select:focus, textarea:focus { border-color: var(--primary); }
     textarea#description { min-height: 110px; }
->>>>>>> a65ab4e (Ajuste geral)
     textarea { min-height: 74px; resize: vertical; }
     .combo { position: relative; }
     .combo-list {
@@ -88,56 +66,33 @@
     .linear-chip .x { background: transparent; border: 0; color: inherit; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
     .combo-item.create { color: #f87171; border-top: 1px solid var(--border); }
     .btn-validate {
-<<<<<<< HEAD
-      margin-top: 6px; width: 100%; background: rgba(239,68,68,.12); color: #f87171;
-      border: 1px solid rgba(239,68,68,.3); border-radius: 9px; padding: 8px 11px;
-=======
       margin-top: 4px; width: 100%; background: rgba(239,68,68,.12); color: #f87171;
       border: 1px solid rgba(239,68,68,.3); border-radius: 8px; padding: 6px 10px;
->>>>>>> a65ab4e (Ajuste geral)
       font: inherit; font-weight: 600; cursor: pointer;
     }
     .btn-validate:hover { background: rgba(239,68,68,.2); }
     .btn-validate:disabled { opacity: .6; cursor: not-allowed; }
-<<<<<<< HEAD
-    .validate-msg { margin-top: 5px; font-size: 12px; min-height: 15px; }
-    .validate-msg.ok { color: #34d399; }
-    .validate-msg.warn { color: #fbbf24; }
-    .search-result {
-      margin-top: 8px; padding: 10px 11px; border: 1px solid var(--border);
-      border-radius: 9px; background: var(--card); display: flex; flex-direction: column; gap: 6px;
-=======
     .validate-msg { margin-top: 3px; font-size: 11.5px; min-height: 14px; }
     .validate-msg.ok { color: #34d399; }
     .validate-msg.warn { color: #fbbf24; }
     .search-result {
       margin-top: 6px; padding: 8px 10px; border: 1px solid var(--border);
       border-radius: 8px; background: var(--card); display: flex; flex-direction: column; gap: 4px;
->>>>>>> a65ab4e (Ajuste geral)
     }
     .search-result__row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px; }
     .search-result__label { flex-shrink: 0; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
     .search-result__value { text-align: right; word-break: break-word; }
     .error { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.25); color: #f87171; padding: 9px 11px; border-radius: 9px; font-size: 13px; }
     footer {
-<<<<<<< HEAD
-      display: flex; gap: 10px; justify-content: flex-end;
-      padding: 14px 16px; border-top: 1px solid var(--border); flex-shrink: 0;
-    }
-    button.btn { border-radius: 9px; padding: 9px 18px; font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--border); }
-=======
       display: flex; gap: 8px; justify-content: flex-end;
       padding: 8px 14px; border-top: 1px solid var(--border); flex-shrink: 0;
     }
     button.btn { border-radius: 8px; padding: 6px 14px; font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--border); }
->>>>>>> a65ab4e (Ajuste geral)
     button.ghost { background: transparent; color: var(--muted); }
     button.ghost:hover { color: var(--text); background: rgba(255,255,255,.05); }
     button.primary { background: linear-gradient(135deg, var(--primary), var(--primary2)); color: #fff; border: 0; }
     button.primary:disabled { opacity: .5; cursor: not-allowed; }
     .muted { color: var(--muted); }
-<<<<<<< HEAD
-=======
 
     .mode-switch {
       position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -189,29 +144,20 @@
       margin: 8px 0 0; padding: 10px 11px; background: var(--card); border: 1px solid var(--border);
       border-radius: 9px; font-size: 13px; white-space: pre-wrap; word-break: break-word;
     }
->>>>>>> a65ab4e (Ajuste geral)
   </style>
 </head>
 <body>
   <header>
-<<<<<<< HEAD
-    <div>
-      <h1>Registrar atendimento</h1>
-      <p>Sem sair do Crisp — salva direto no sistema.</p>
-=======
     <div class="mode-switch" id="modeSwitch">
       <div class="mode-switch__thumb"></div>
       <button type="button" class="mode-switch__option active" id="modeCreate" data-mode="create" title="Criar ticket">Criar</button>
       <button type="button" class="mode-switch__option" id="modeConsult" data-mode="consult" title="Consultar ticket">Consultar</button>
       <button type="button" class="mode-switch__option" id="modeModules" data-mode="modules" title="Módulos">Módulos</button>
       <button type="button" class="mode-switch__option" id="modeContacts" data-mode="contacts" title="Contatos">Contatos</button>
->>>>>>> a65ab4e (Ajuste geral)
     </div>
     <button class="close" id="close" title="Fechar">&times;</button>
   </header>
 
-<<<<<<< HEAD
-=======
   <div id="loginGate" style="display:none; flex:1; padding:16px; flex-direction:column; gap:14px;">
     <p class="muted" style="margin:0;">Faça login pra registrar atendimentos.</p>
     <form id="loginForm" autocomplete="off" style="display:flex; flex-direction:column; gap:14px;">
@@ -242,7 +188,6 @@
       </div>
     </div>
   </div>
->>>>>>> a65ab4e (Ajuste geral)
   <form id="form" autocomplete="off">
     <div class="field">
       <label for="subject">Assunto *</label>
@@ -261,14 +206,11 @@
     </div>
 
     <div class="field">
-<<<<<<< HEAD
-=======
       <label for="email">E-mail do contato<span id="emailRequiredHint" class="muted" style="display:none;"> — obrigatório pra criar contato via chat</span></label>
       <input id="email" type="email" placeholder="E-mail do cliente" />
     </div>
 
     <div class="field">
->>>>>>> a65ab4e (Ajuste geral)
       <label for="url">URL do atendimento</label>
       <input id="url" placeholder="https://app.crisp.chat/..." />
     </div>
@@ -278,11 +220,7 @@
       <textarea id="description" placeholder="Detalhes do atendimento..."></textarea>
     </div>
 
-<<<<<<< HEAD
-    <div class="row">
-=======
     <div class="row3">
->>>>>>> a65ab4e (Ajuste geral)
       <div class="field">
         <label for="status">Status</label>
         <select id="status">
@@ -300,18 +238,6 @@
           <option value="L">L — Lonngren</option>
         </select>
       </div>
-<<<<<<< HEAD
-    </div>
-
-    <div class="field">
-      <label for="canal">Canal / Origem</label>
-      <select id="canal">
-        <option value="chat">Chat</option>
-        <option value="whatsapp">WhatsApp</option>
-        <option value="email">E-mail</option>
-        <option value="telefone">Telefone</option>
-      </select>
-=======
       <div class="field">
         <label for="canal">Canal</label>
         <select id="canal">
@@ -321,7 +247,6 @@
           <option value="telefone">Telefone</option>
         </select>
       </div>
->>>>>>> a65ab4e (Ajuste geral)
     </div>
 
     <div class="field">
@@ -353,21 +278,13 @@
       </div>
     </div>
 
-<<<<<<< HEAD
-    <div class="row">
-=======
     <div class="row3">
->>>>>>> a65ab4e (Ajuste geral)
       <div class="field">
         <label for="attendant">Atendente</label>
         <select id="attendant"><option value="">— Não atribuído —</option></select>
       </div>
       <div class="field">
-<<<<<<< HEAD
-        <label for="priority">Prioridade (SLA)</label>
-=======
         <label for="priority">Prioridade</label>
->>>>>>> a65ab4e (Ajuste geral)
         <select id="priority">
           <option value="baixa">Baixa</option>
           <option value="media" selected>Média</option>
@@ -375,30 +292,6 @@
           <option value="urgente">Urgente</option>
         </select>
       </div>
-<<<<<<< HEAD
-    </div>
-
-    <div class="field">
-      <label for="dueDate">Prazo</label>
-      <input id="dueDate" type="datetime-local" />
-    </div>
-
-    <div class="field">
-      <label for="tagInput">Tags</label>
-      <div class="combo">
-        <div id="tagChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;"></div>
-        <input id="tagInput" placeholder="Adicionar tag..." autocomplete="off" />
-        <div id="tagList" class="combo-list" style="display:none"></div>
-      </div>
-    </div>
-
-    <div class="field">
-      <label for="linear">Issues vinculadas no Linear (opcional)</label>
-      <div class="combo">
-        <div id="linearChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;"></div>
-        <input id="linear" placeholder="Buscar issue no Linear (ex.: ENG-123)..." autocomplete="off" />
-        <div id="linearList" class="combo-list" style="display:none"></div>
-=======
       <div class="field">
         <label for="dueDate">Prazo</label>
         <input id="dueDate" type="datetime-local" />
@@ -421,7 +314,6 @@
           <div id="linearChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
           <div id="linearList" class="combo-list" style="display:none"></div>
         </div>
->>>>>>> a65ab4e (Ajuste geral)
       </div>
     </div>
 
@@ -429,11 +321,6 @@
   </form>
 
   <footer>
-<<<<<<< HEAD
-    <button type="button" class="btn ghost" id="cancel">Cancelar</button>
-    <button type="submit" form="form" class="btn primary" id="submit">Criar ticket</button>
-  </footer>
-=======
     <button type="button" class="btn ghost" id="logout" style="margin-right:auto; color: var(--muted2);">Sair</button>
     <button type="button" class="btn ghost" id="cancel">Cancelar</button>
     <button type="submit" form="form" class="btn primary" id="submit">Criar ticket</button>
@@ -532,7 +419,6 @@
     </div>
   </div>
   </div>
->>>>>>> a65ab4e (Ajuste geral)
 
   <script src="drawer.js"></script>
 </body>

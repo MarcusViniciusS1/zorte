@@ -1,11 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Zorte Crisp — Atendimento e Etiquetas",
-<<<<<<< HEAD
-  "version": "5.3.5",
-=======
   "version": "5.11.4",
->>>>>>> a65ab4e (Ajuste geral)
   "description": "Unificação: etiquetas/indicadores na lista do Crisp (status, atribuição, janela 24h, contadores, canal, empresa) + validação de empresa no sistema interno e registro de atendimento pelo painel lateral.",
   "permissions": [
     "storage",
@@ -16,13 +12,9 @@
   "host_permissions": [
     "https://app.crisp.chat/*",
     "https://chat.crisp.chat/*",
-<<<<<<< HEAD
-    "http://192.168.0.103:3001/*"
-=======
     "http://192.168.0.104:3001/*",
     "http://192.168.0.104:5173/*",
     "http://localhost:5173/*"
->>>>>>> a65ab4e (Ajuste geral)
   ],
   "background": {
     "service_worker": "background.js"
@@ -61,14 +53,11 @@
       "matches": ["https://app.crisp.chat/*"],
       "js": ["cnpj-scanner.js", "tenant.js"],
       "run_at": "document_idle"
-<<<<<<< HEAD
-=======
     },
     {
       "matches": ["http://192.168.0.104:5173/*", "http://localhost:5173/*"],
       "js": ["web-bridge.js"],
       "run_at": "document_idle"
->>>>>>> a65ab4e (Ajuste geral)
     }
   ]
 }

@@ -2,16 +2,10 @@
 //
 // 1) Responde ao popup (action "extractTenant") e ao Side Panel
 //    (action "validateCurrent") lendo o perfil da conversa aberta.
-<<<<<<< HEAD
-// 2) Injeta um botão flutuante que abre o PAINEL LATERAL (Side Panel) do
-//    navegador para registrar o atendimento — o Chrome encolhe a aba do Crisp,
-//    então o painel não tampa nenhuma informação.
-=======
 // 2) Injeta um botão ao lado do perfil do contato (painel da direita) que
 //    abre o PAINEL LATERAL (Side Panel) do navegador para registrar o
 //    atendimento — o Chrome encolhe a aba do Crisp, então o painel não tampa
 //    nenhuma informação.
->>>>>>> a65ab4e (Ajuste geral)
 
 // Lê o widget de perfil da conversa aberta: candidatos (cnpj/empresa/tenant/tags),
 // telefone, nome do contato e a URL atual.
@@ -31,11 +25,8 @@ if (window.__ztTenantShutdown) {
   const w = document.getElementById('zt-drawer-wrap'); if (w) w.remove();
 })();
 let __ztInterval = null;
-<<<<<<< HEAD
-=======
 let __ztWidgetClickHandler = null;
 let __ztKeydownHandler = null;
->>>>>>> a65ab4e (Ajuste geral)
 window.__ztTenantShutdown = function () {
   try { clearInterval(__ztInterval); } catch (e) {}
   const oldBtn = document.getElementById('zt-launcher');
@@ -46,11 +37,8 @@ window.__ztTenantShutdown = function () {
   // função só é CHAMADA por uma futura reinjeção (depois que o script todo já
   // rodou), então a referência já está inicializada nesse momento.
   try { if (typeof cnpjScannerInstance !== 'undefined' && cnpjScannerInstance) cnpjScannerInstance.stop(); } catch (e) {}
-<<<<<<< HEAD
-=======
   try { if (__ztWidgetClickHandler) document.removeEventListener('click', __ztWidgetClickHandler, true); } catch (e) {}
   try { if (__ztKeydownHandler) document.removeEventListener('keydown', __ztKeydownHandler); } catch (e) {}
->>>>>>> a65ab4e (Ajuste geral)
 };
 
 // Detecta o canal/origem da conversa aberta (chat, whatsapp, email, telefone)
@@ -108,10 +96,7 @@ function extractProfile() {
   let candidates = [];
   let phone = extractVisitorPhone();
   let personName = "";
-<<<<<<< HEAD
-=======
   let email = "";
->>>>>>> a65ab4e (Ajuste geral)
   const currentUrl = window.location.href;
 
   try {
@@ -173,8 +158,6 @@ function extractProfile() {
       if (emp) candidates.push(emp);
     }
 
-<<<<<<< HEAD
-=======
     // E-mail do contato (quando o Crisp já tem um cadastrado) também entra
     // como candidato de busca — bate contra empresas.email no backend (ver
     // /api/empresas/validar), então um contato cujo e-mail já foi vinculado a
@@ -188,15 +171,11 @@ function extractProfile() {
       }
     }
 
->>>>>>> a65ab4e (Ajuste geral)
     candidates = [...new Set(candidates.filter(c => c))];
   } catch (error) {
     /* ignora falhas de leitura do DOM */
   }
 
-<<<<<<< HEAD
-  return { candidates, url: currentUrl, phone, name: personName, channel: detectChannel() };
-=======
   return { candidates, url: currentUrl, phone, name: personName, email, channel: detectChannel() };
 }
 
@@ -343,7 +322,6 @@ function fillEmailIfMissing(profile, data) {
       }
     })
     .catch((e) => console.warn('[Zorte Crisp] fillEmailIfMissing: falha na chamada.', e && e.message));
->>>>>>> a65ab4e (Ajuste geral)
 }
 
 // Extrai o perfil e valida a empresa no banco (mesma lógica do popup).
@@ -352,21 +330,6 @@ async function validateCurrent() {
   const profile = extractProfile();
   let data = null;
   if (profile.candidates && profile.candidates.length) {
-<<<<<<< HEAD
-    data = await new Promise((resolve) => {
-      try {
-        chrome.runtime.sendMessage({ action: 'searchDatabase', query: profile.candidates }, (r) => {
-          if (chrome.runtime.lastError) return resolve(null);
-          resolve(r && r.success ? r.data : null);
-        });
-      } catch { resolve(null); }
-    });
-  }
-  return {
-    found: !!data,
-    data,
-    extra: { name: profile.name, phone: profile.phone, url: profile.url || location.href, channel: profile.channel || '' },
-=======
     try {
       const r = await chrome.runtime.sendMessage({ action: 'searchDatabase', query: profile.candidates });
       data = r && r.success ? r.data : null;
@@ -382,7 +345,6 @@ async function validateCurrent() {
     extra: { name: profile.name, phone: profile.phone, email: profile.email, url: profile.url || location.href, channel: profile.channel || '' },
     websiteId: extractWebsiteId(),
     sessionId: extractSessionId(),
->>>>>>> a65ab4e (Ajuste geral)
   };
 }
 
@@ -407,8 +369,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // resposta assíncrona
   }
 
-<<<<<<< HEAD
-=======
   // Pedido do background (botão "Resumir com IA" do drawer): raspa as
   // mensagens de hoje direto do HTML, sem tocar na API do Crisp.
   if (request.action === "scrapeTodayMessages") {
@@ -420,17 +380,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
->>>>>>> a65ab4e (Ajuste geral)
   // Não é uma mensagem deste script (ex.: CRISP_GET_STATUS é do crisp-ui.js):
   // não segura o canal de resposta.
   return false;
 });
 
-<<<<<<< HEAD
-// ---- Botão flutuante que abre o Side Panel ----
-function mountLauncher() {
-  if (document.getElementById('zt-launcher')) return;
-=======
 // Abre o painel (nativo do Chrome; se recusar, cai pro drawer embutido na
 // página) — usado tanto pelo clique no botão flutuante quanto pelo atalho
 // de teclado Ctrl+\ (ver listener mais abaixo). Chamado sempre a partir de
@@ -497,37 +451,11 @@ function mountLauncher() {
   const profileInfo = document.querySelector(PROFILE_INFO_SELECTOR);
   if (!profileInfo) return; // painel de perfil ainda não carregado — tenta de novo no próximo tick
 
->>>>>>> a65ab4e (Ajuste geral)
   const btn = document.createElement('button');
   btn.id = 'zt-launcher';
   btn.type = 'button';
   btn.textContent = '+ Registrar atendimento';
   btn.style.cssText =
-<<<<<<< HEAD
-    'position:fixed;right:16px;bottom:16px;z-index:2147483645;border:0;cursor:pointer;' +
-    'padding:10px 16px;border-radius:999px;color:#fff;font:600 13px/1 -apple-system,Segoe UI,Roboto,sans-serif;' +
-    'background:linear-gradient(135deg,#ef4444,#dc2626);box-shadow:0 6px 24px rgba(239,68,68,.4);';
-  // O clique é um gesto do usuário: tenta o painel lateral nativo do Chrome.
-  // Se o Chrome recusar (gesto perdido/serviço dormindo), abre o drawer na
-  // própria página como fallback — assim o botão SEMPRE abre algo.
-  btn.addEventListener('click', () => {
-    try {
-      chrome.runtime.sendMessage({ action: 'openSidePanel' }, (resp) => {
-        if (chrome.runtime.lastError) {
-          console.warn('[Zorte Crisp] Extensão recarregada — dê F5 na aba do Crisp.', chrome.runtime.lastError.message);
-          return;
-        }
-        if (resp && resp.ok === false) {
-          console.warn('[Zorte Crisp] Painel nativo recusado, abrindo na página. Motivo:', resp.error);
-          openInPageDrawer();
-        }
-      });
-    } catch (e) {
-      console.warn('[Zorte Crisp] Extensão recarregada — dê F5 na aba do Crisp.', e && e.message);
-    }
-  });
-  document.body.appendChild(btn);
-=======
     'margin-left:auto;border:0;cursor:pointer;flex-shrink:0;white-space:nowrap;align-self:center;' +
     'padding:6px 14px;border-radius:999px;color:#fff;font:600 12px/1 -apple-system,Segoe UI,Roboto,sans-serif;' +
     'background:linear-gradient(135deg,#ef4444,#dc2626);box-shadow:0 2px 10px rgba(239,68,68,.35);';
@@ -536,7 +464,6 @@ function mountLauncher() {
   // própria página como fallback — assim o botão SEMPRE abre algo.
   btn.addEventListener('click', openDrawer);
   profileInfo.appendChild(btn);
->>>>>>> a65ab4e (Ajuste geral)
 }
 
 // ---- Fallback: drawer dentro da própria página (iframe da extensão) ----
@@ -577,8 +504,6 @@ window.addEventListener('message', (e) => {
   if (d.type === 'close' || d.type === 'created') closeInPageDrawer();
 });
 
-<<<<<<< HEAD
-=======
 // ---- Ponte: botão "Criar Ticket" do painel nativo do Crisp ----
 // Se o Generic Widget "Zorte Integration" ainda estiver instalado no
 // Marketplace do Crisp (o backend que o suportava foi removido — só restou
@@ -596,7 +521,6 @@ __ztWidgetClickHandler = function (ev) {
 };
 document.addEventListener('click', __ztWidgetClickHandler, true);
 
->>>>>>> a65ab4e (Ajuste geral)
 // ---- CNPJ/CPF automático: pesquisa + aviso ao drawer (se estiver aberto). ----
 // Duas buscas convivem, uma não substitui a outra:
 //   1) extractProfile() (acima) — já lia segmento/tag/nome-do-perfil atrás de
@@ -607,25 +531,6 @@ document.addEventListener('click', __ztWidgetClickHandler, true);
 //      conta se passar no dígito verificador (evita confundir com celular).
 // Quando o scanner encontra um documento novo, CONSULTA se está cadastrado no
 // banco (mesma rota que o resto da extensão usa — a busca funciona por dígitos,
-<<<<<<< HEAD
-// não importa se é CNPJ ou CPF), loga o resultado no console e — se achou —
-// avisa o drawer (chrome.runtime.sendMessage chega tanto no painel lateral
-// nativo quanto no iframe injetado, os dois são páginas da extensão).
-// Nenhuma escrita no DOM/perfil do Crisp acontece aqui.
-async function handleNewDocumento(documento) {
-  const tipo = documento.includes('/') ? 'CNPJ' : 'CPF';
-  chrome.runtime.sendMessage({ action: 'searchDatabase', query: [documento] }, (r) => {
-    if (chrome.runtime.lastError) return;
-    if (r && r.success) {
-      console.info(`[Zorte Crisp] ${tipo} ${documento} detectado na conversa — CADASTRADO (${r.data && (r.data.name || r.data.nome)}).`);
-      // Fire-and-forget: sem drawer aberto, não há listener — lastError é só
-      // descartado pra não gerar warning no console.
-      chrome.runtime.sendMessage({ action: 'cnpjMatchFound', company: r.data }, () => { void chrome.runtime.lastError; });
-    } else {
-      console.info(`[Zorte Crisp] ${tipo} ${documento} detectado na conversa — não cadastrado no banco.`);
-    }
-  });
-=======
 // não importa se é CNPJ ou CPF), loga o resultado no console, avisa o drawer
 // (chrome.runtime.sendMessage chega tanto no painel lateral nativo quanto no
 // iframe injetado) e grava o CNPJ no "Dados do visitante" do Crisp (ver
@@ -654,7 +559,6 @@ async function handleNewDocumento(documento) {
   } else {
     console.info(`[Zorte Crisp] ${tipo} ${documento} detectado na conversa — não cadastrado no banco.`);
   }
->>>>>>> a65ab4e (Ajuste geral)
 }
 
 let cnpjScannerInstance = null;
@@ -668,12 +572,6 @@ function startCnpjScanner() {
   cnpjScannerInstance.start();
 }
 
-<<<<<<< HEAD
-// O Crisp é uma SPA e recria o DOM; reinsere o botão periodicamente se sumir.
-mountLauncher();
-startCnpjScanner();
-__ztInterval = setInterval(mountLauncher, 1500);
-=======
 // Mesmo placeholder usado pelo botão manual "Criar contato" do drawer (ver
 // drawer.js) — precisa ser o MESMO valor literal nos dois lugares (não dá
 // pra importar entre content scripts/extension pages), senão a lógica de
@@ -875,4 +773,3 @@ __ztInterval = setInterval(async () => {
   maybeAutoUpsertContactForActiveConversation();
   notifyIfConversationChanged();
 }, 1500);
->>>>>>> a65ab4e (Ajuste geral)

@@ -10,16 +10,6 @@
 // (B) Backend local + Side Panel
 // ============================================================
 
-<<<<<<< HEAD
-const API_BASE = 'http://192.168.0.103:3001/api/empresas';
-const API_ROOT = 'http://192.168.0.103:3001/api';
-
-async function apiGet(path) {
-  try {
-    const res = await fetch(`${API_ROOT}${path}`);
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, data };
-=======
 const API_BASE = 'http://192.168.0.104:3001/api/empresas';
 const API_ROOT = 'http://192.168.0.104:3001/api';
 
@@ -73,7 +63,6 @@ async function apiGet(path) {
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) await chrome.storage.local.remove('zt_token');
     return { ok: res.ok, unauthorized: res.status === 401, data };
->>>>>>> a65ab4e (Ajuste geral)
   } catch (err) {
     return { ok: false, error: String(err && err.message ? err.message : err) };
   }
@@ -82,13 +71,6 @@ async function apiPost(path, body) {
   try {
     const res = await fetch(`${API_ROOT}${path}`, {
       method: 'POST',
-<<<<<<< HEAD
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, data };
-=======
       headers: await authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
     });
@@ -109,7 +91,6 @@ async function apiPatch(path, body) {
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) await chrome.storage.local.remove('zt_token');
     return { ok: res.ok, unauthorized: res.status === 401, data };
->>>>>>> a65ab4e (Ajuste geral)
   } catch (err) {
     return { ok: false, error: String(err && err.message ? err.message : err) };
   }
@@ -121,17 +102,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // Abre o painel lateral na aba de onde veio o clique (sempre uma aba do
   // Crisp). open() precisa rodar dentro do gesto do usuário: nada de await antes.
   if (request.action === "openSidePanel") {
-<<<<<<< HEAD
-    const tabId = sender && sender.tab && sender.tab.id;
-    if (tabId == null) { sendResponse({ ok: false, error: 'sem aba' }); return true; }
-    chrome.sidePanel.setOptions({ tabId, path: 'drawer.html', enabled: true });
-    chrome.sidePanel.open({ tabId })
-      .then(() => sendResponse({ ok: true }))
-      .catch((e) => sendResponse({ ok: false, error: e.message }));
-    return true;
-  }
-
-=======
     openNativeSidePanel(sender && sender.tab && sender.tab.id, sendResponse);
     return true;
   }
@@ -159,7 +129,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
   }
 
->>>>>>> a65ab4e (Ajuste geral)
   // O painel pede o contexto da conversa: repassa ao content script da aba
   // ativa do Crisp e devolve { ok, found, data, extra }.
   if (request.action === "getContext") {
@@ -174,9 +143,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           sendResponse({ ok: false, error: chrome.runtime.lastError.message });
           return;
         }
-<<<<<<< HEAD
-        sendResponse({ ok: true, found: !!(r && r.found), data: r && r.data, extra: (r && r.extra) || {} });
-=======
         sendResponse({
           ok: true,
           found: !!(r && r.found),
@@ -185,14 +151,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           websiteId: r && r.websiteId,
           sessionId: r && r.sessionId,
         });
->>>>>>> a65ab4e (Ajuste geral)
       });
     });
     return true;
   }
 
-<<<<<<< HEAD
-=======
   // Pede pra IA (Gemini, no backend) sugerir os campos do ticket a partir das
   // mensagens de HOJE — raspadas do HTML da conversa (tenant.js), não da API
   // do Crisp. O backend só recebe o texto que já está na tela.
@@ -265,7 +228,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
->>>>>>> a65ab4e (Ajuste geral)
   if (request.action === "getAttendants") {
     apiGet('/attendants?order_by=name&order_dir=asc').then(sendResponse);
     return true;
@@ -276,8 +238,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-<<<<<<< HEAD
-=======
   if (request.action === "crispSetPersonData") {
     apiPost('/crisp/person-data', request.payload).then(sendResponse);
     return true;
@@ -291,14 +251,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
->>>>>>> a65ab4e (Ajuste geral)
   if (request.action === "createTicket") {
     apiPost('/tickets', request.ticket).then(sendResponse);
     return true;
   }
 
-<<<<<<< HEAD
-=======
   // Cria o contato do cliente no sistema web a partir dos campos já
   // preenchidos no drawer (ver botão "Criar contato" em drawer.js).
   if (request.action === "createContact") {
@@ -325,7 +282,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
->>>>>>> a65ab4e (Ajuste geral)
   if (request.action === "getTags") {
     apiGet('/tags?order_by=name&order_dir=asc').then(sendResponse);
     return true;
@@ -353,27 +309,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === "searchDatabase") {
     const candidates = request.query;
-<<<<<<< HEAD
-    fetch(`${API_BASE}/validar`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ candidates })
-    })
-      .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-      })
-      .then(data => {
-        if (data && data.found) {
-          sendResponse({ success: true, data: data.data });
-        } else {
-          sendResponse({ success: false, reason: "NOT_FOUND" });
-        }
-      })
-      .catch(error => {
-        sendResponse({ success: false, reason: "API_ERROR", message: error.message });
-      });
-=======
     authHeaders({ 'Content-Type': 'application/json' }).then((headers) => {
       fetch(`${API_BASE}/validar`, { method: 'POST', headers, body: JSON.stringify({ candidates }) })
         .then(async (response) => {
@@ -387,21 +322,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         })
         .catch(error => sendResponse({ success: false, reason: "API_ERROR", message: error.message }));
     });
->>>>>>> a65ab4e (Ajuste geral)
     return true;
   }
 
   if (request.action === "testConnection") {
-<<<<<<< HEAD
-    fetch(`${API_BASE}?limit=1`)
-      .then(response => {
-        if (response.ok) sendResponse({ success: true });
-        else throw new Error(`Erro HTTP: ${response.status}`);
-      })
-      .catch(error => {
-        sendResponse({ success: false, message: error.message });
-      });
-=======
     authHeaders().then((headers) => {
       fetch(`${API_BASE}?limit=1`, { headers })
         .then(response => {
@@ -451,7 +375,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.storage.local.get(['zt_token', 'zt_attendant']).then(({ zt_token, zt_attendant }) => {
       sendResponse({ ok: true, authed: Boolean(zt_token), attendant: zt_attendant || null });
     });
->>>>>>> a65ab4e (Ajuste geral)
     return true;
   }
 
@@ -477,8 +400,6 @@ chrome.tabs.onActivated.addListener(({ tabId }) => {
   });
 });
 
-<<<<<<< HEAD
-=======
 // onActivated só dispara quando a aba ATIVA de uma janela muda — trocar de
 // JANELA (ex.: Alt+Tab para uma janela do Chrome já aberta numa aba que não
 // é do Crisp) não gera esse evento, porque a aba ativa daquela janela não
@@ -506,7 +427,6 @@ setInterval(() => {
   });
 }, 1000);
 
->>>>>>> a65ab4e (Ajuste geral)
 // ============================================================
 // (A) Badge por aba + reinjeção + aviso de versão
 // ============================================================
@@ -559,8 +479,6 @@ async function reinjectIntoOpenTabs() {
       if (/^https:\/\/app\.crisp\.chat\//.test(tab.url || "")) {
         await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tenant.js"] });
       }
-<<<<<<< HEAD
-=======
     } catch (e) {
       // aba protegida ou descartada - ignora
     }
@@ -572,7 +490,6 @@ async function reinjectIntoOpenTabs() {
   for (const tab of webTabs) {
     try {
       await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["web-bridge.js"] });
->>>>>>> a65ab4e (Ajuste geral)
     } catch (e) {
       // aba protegida ou descartada - ignora
     }

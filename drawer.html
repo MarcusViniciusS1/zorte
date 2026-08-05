@@ -17,6 +17,7 @@
       display: flex; flex-direction: column; height: 100%;
     }
     header {
+<<<<<<< HEAD
       display: flex; align-items: center; justify-content: space-between; gap: 8px;
       padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
     }
@@ -36,6 +37,27 @@
       color: var(--text); border-radius: 9px; padding: 9px 11px; font: inherit; outline: none;
     }
     input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+=======
+      position: relative; display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+      padding: 2px 8px 2px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .close {
+      background: transparent; border: 0; color: var(--muted); cursor: pointer;
+      font-size: 16px; line-height: 1; padding: 3px; border-radius: 7px; flex-shrink: 0;
+    }
+    .close:hover { background: rgba(255,255,255,.06); color: var(--text); }
+    form { flex: 1; overflow-y: auto; padding: 10px 16px; display: flex; flex-direction: column; gap: 7px; }
+    .field { display: flex; flex-direction: column; gap: 2px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    label { font-size: 10.5px; font-weight: 600; color: var(--muted); }
+    input, select, textarea {
+      width: 100%; background: var(--card); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px; padding: 5px 8px; font: inherit; outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+    textarea#description { min-height: 110px; }
+>>>>>>> a65ab4e (Ajuste geral)
     textarea { min-height: 74px; resize: vertical; }
     .combo { position: relative; }
     .combo-list {
@@ -66,44 +88,161 @@
     .linear-chip .x { background: transparent; border: 0; color: inherit; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
     .combo-item.create { color: #f87171; border-top: 1px solid var(--border); }
     .btn-validate {
+<<<<<<< HEAD
       margin-top: 6px; width: 100%; background: rgba(239,68,68,.12); color: #f87171;
       border: 1px solid rgba(239,68,68,.3); border-radius: 9px; padding: 8px 11px;
+=======
+      margin-top: 4px; width: 100%; background: rgba(239,68,68,.12); color: #f87171;
+      border: 1px solid rgba(239,68,68,.3); border-radius: 8px; padding: 6px 10px;
+>>>>>>> a65ab4e (Ajuste geral)
       font: inherit; font-weight: 600; cursor: pointer;
     }
     .btn-validate:hover { background: rgba(239,68,68,.2); }
     .btn-validate:disabled { opacity: .6; cursor: not-allowed; }
+<<<<<<< HEAD
     .validate-msg { margin-top: 5px; font-size: 12px; min-height: 15px; }
     .validate-msg.ok { color: #34d399; }
     .validate-msg.warn { color: #fbbf24; }
     .search-result {
       margin-top: 8px; padding: 10px 11px; border: 1px solid var(--border);
       border-radius: 9px; background: var(--card); display: flex; flex-direction: column; gap: 6px;
+=======
+    .validate-msg { margin-top: 3px; font-size: 11.5px; min-height: 14px; }
+    .validate-msg.ok { color: #34d399; }
+    .validate-msg.warn { color: #fbbf24; }
+    .search-result {
+      margin-top: 6px; padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--card); display: flex; flex-direction: column; gap: 4px;
+>>>>>>> a65ab4e (Ajuste geral)
     }
     .search-result__row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px; }
     .search-result__label { flex-shrink: 0; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
     .search-result__value { text-align: right; word-break: break-word; }
     .error { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.25); color: #f87171; padding: 9px 11px; border-radius: 9px; font-size: 13px; }
     footer {
+<<<<<<< HEAD
       display: flex; gap: 10px; justify-content: flex-end;
       padding: 14px 16px; border-top: 1px solid var(--border); flex-shrink: 0;
     }
     button.btn { border-radius: 9px; padding: 9px 18px; font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--border); }
+=======
+      display: flex; gap: 8px; justify-content: flex-end;
+      padding: 8px 14px; border-top: 1px solid var(--border); flex-shrink: 0;
+    }
+    button.btn { border-radius: 8px; padding: 6px 14px; font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--border); }
+>>>>>>> a65ab4e (Ajuste geral)
     button.ghost { background: transparent; color: var(--muted); }
     button.ghost:hover { color: var(--text); background: rgba(255,255,255,.05); }
     button.primary { background: linear-gradient(135deg, var(--primary), var(--primary2)); color: #fff; border: 0; }
     button.primary:disabled { opacity: .5; cursor: not-allowed; }
     .muted { color: var(--muted); }
+<<<<<<< HEAD
+=======
+
+    .mode-switch {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      display: none; padding: 2px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 7px;
+    }
+    .mode-switch__thumb {
+      position: absolute; top: 2px; left: 2px; width: 66px; height: calc(100% - 4px);
+      background: linear-gradient(135deg, var(--primary), var(--primary2)); border-radius: 5px;
+      transition: transform .2s ease; z-index: 0;
+    }
+    .mode-switch--consult .mode-switch__thumb { transform: translateX(66px); }
+    .mode-switch--modules .mode-switch__thumb { transform: translateX(132px); }
+    .mode-switch--contacts .mode-switch__thumb { transform: translateX(198px); }
+    .mode-switch__option {
+      position: relative; z-index: 1; background: transparent; border: 0; white-space: nowrap;
+      color: var(--muted); font: inherit; font-size: 10px; font-weight: 700; cursor: pointer;
+      width: 66px; padding: 3px 0; border-radius: 5px; transition: color .2s ease;
+      text-align: center; overflow: hidden; text-overflow: ellipsis;
+    }
+    .mode-switch__option.active { color: #fff; }
+
+    .ticket-row {
+      display: block; padding: 10px 11px; border: 1px solid var(--border); border-radius: 9px;
+      background: var(--card); text-decoration: none; color: inherit; cursor: pointer;
+    }
+    .ticket-row:hover { border-color: var(--primary); background: rgba(239,68,68,.08); }
+    .ticket-row__top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .ticket-row__subject { font-size: 13px; font-weight: 600; }
+    .ticket-row__number { font-size: 11px; color: var(--muted2); flex-shrink: 0; }
+    .ticket-row__meta { margin-top: 5px; font-size: 11px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 10px; }
+    .status-pill { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; text-transform: uppercase; letter-spacing: .02em; }
+
+    .toggle-chip {
+      background: var(--card); border: 1px solid var(--border); color: var(--muted);
+      border-radius: 8px; padding: 7px 11px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .toggle-chip:hover { color: var(--text); }
+    .toggle-chip.active { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.35); color: #f87171; }
+
+    .detail-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--text); }
+    .detail-row {
+      display: flex; justify-content: space-between; gap: 10px; padding: 8px 0;
+      border-bottom: 1px solid var(--border); font-size: 13px;
+    }
+    .detail-row__label { flex-shrink: 0; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; padding-top: 1px; }
+    .detail-row__value { text-align: right; word-break: break-word; }
+    .detail-description {
+      margin: 8px 0 0; padding: 10px 11px; background: var(--card); border: 1px solid var(--border);
+      border-radius: 9px; font-size: 13px; white-space: pre-wrap; word-break: break-word;
+    }
+>>>>>>> a65ab4e (Ajuste geral)
   </style>
 </head>
 <body>
   <header>
+<<<<<<< HEAD
     <div>
       <h1>Registrar atendimento</h1>
       <p>Sem sair do Crisp — salva direto no sistema.</p>
+=======
+    <div class="mode-switch" id="modeSwitch">
+      <div class="mode-switch__thumb"></div>
+      <button type="button" class="mode-switch__option active" id="modeCreate" data-mode="create" title="Criar ticket">Criar</button>
+      <button type="button" class="mode-switch__option" id="modeConsult" data-mode="consult" title="Consultar ticket">Consultar</button>
+      <button type="button" class="mode-switch__option" id="modeModules" data-mode="modules" title="Módulos">Módulos</button>
+      <button type="button" class="mode-switch__option" id="modeContacts" data-mode="contacts" title="Contatos">Contatos</button>
+>>>>>>> a65ab4e (Ajuste geral)
     </div>
     <button class="close" id="close" title="Fechar">&times;</button>
   </header>
 
+<<<<<<< HEAD
+=======
+  <div id="loginGate" style="display:none; flex:1; padding:16px; flex-direction:column; gap:14px;">
+    <p class="muted" style="margin:0;">Faça login pra registrar atendimentos.</p>
+    <form id="loginForm" autocomplete="off" style="display:flex; flex-direction:column; gap:14px;">
+      <div class="field">
+        <label for="loginEmail">E-mail</label>
+        <input id="loginEmail" type="email" autocomplete="username" />
+      </div>
+      <div class="field">
+        <label for="loginPassword">Senha</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" />
+      </div>
+      <div id="loginError" class="error" style="display:none"></div>
+      <button type="submit" class="btn primary" id="loginSubmit">Entrar</button>
+    </form>
+  </div>
+
+  <div id="appContent" style="display:none; flex:1; overflow-y:auto; flex-direction:column;">
+  <div id="createPanel" style="display:contents">
+  <div style="padding:8px 16px 0;">
+    <div style="display:flex; gap:8px;">
+      <div style="flex:1; min-width:0;">
+        <button type="button" class="btn primary" id="summarize" title="Resumir com IA e preencher" style="width:100%; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">✨ Resumir com IA</button>
+        <div id="summarizeMsg" class="validate-msg"></div>
+      </div>
+      <div style="flex:1; min-width:0;">
+        <button type="button" class="btn-validate" id="createContactBtn" title="Criar contato do cliente" style="width:100%; margin-top:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 Criar contato</button>
+        <div id="createContactMsg" class="validate-msg"></div>
+      </div>
+    </div>
+  </div>
+>>>>>>> a65ab4e (Ajuste geral)
   <form id="form" autocomplete="off">
     <div class="field">
       <label for="subject">Assunto *</label>
@@ -122,6 +261,14 @@
     </div>
 
     <div class="field">
+<<<<<<< HEAD
+=======
+      <label for="email">E-mail do contato<span id="emailRequiredHint" class="muted" style="display:none;"> — obrigatório pra criar contato via chat</span></label>
+      <input id="email" type="email" placeholder="E-mail do cliente" />
+    </div>
+
+    <div class="field">
+>>>>>>> a65ab4e (Ajuste geral)
       <label for="url">URL do atendimento</label>
       <input id="url" placeholder="https://app.crisp.chat/..." />
     </div>
@@ -131,7 +278,11 @@
       <textarea id="description" placeholder="Detalhes do atendimento..."></textarea>
     </div>
 
+<<<<<<< HEAD
     <div class="row">
+=======
+    <div class="row3">
+>>>>>>> a65ab4e (Ajuste geral)
       <div class="field">
         <label for="status">Status</label>
         <select id="status">
@@ -149,6 +300,7 @@
           <option value="L">L — Lonngren</option>
         </select>
       </div>
+<<<<<<< HEAD
     </div>
 
     <div class="field">
@@ -159,6 +311,17 @@
         <option value="email">E-mail</option>
         <option value="telefone">Telefone</option>
       </select>
+=======
+      <div class="field">
+        <label for="canal">Canal</label>
+        <select id="canal">
+          <option value="chat">Chat</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="email">E-mail</option>
+          <option value="telefone">Telefone</option>
+        </select>
+      </div>
+>>>>>>> a65ab4e (Ajuste geral)
     </div>
 
     <div class="field">
@@ -190,13 +353,21 @@
       </div>
     </div>
 
+<<<<<<< HEAD
     <div class="row">
+=======
+    <div class="row3">
+>>>>>>> a65ab4e (Ajuste geral)
       <div class="field">
         <label for="attendant">Atendente</label>
         <select id="attendant"><option value="">— Não atribuído —</option></select>
       </div>
       <div class="field">
+<<<<<<< HEAD
         <label for="priority">Prioridade (SLA)</label>
+=======
+        <label for="priority">Prioridade</label>
+>>>>>>> a65ab4e (Ajuste geral)
         <select id="priority">
           <option value="baixa">Baixa</option>
           <option value="media" selected>Média</option>
@@ -204,6 +375,7 @@
           <option value="urgente">Urgente</option>
         </select>
       </div>
+<<<<<<< HEAD
     </div>
 
     <div class="field">
@@ -226,6 +398,30 @@
         <div id="linearChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;"></div>
         <input id="linear" placeholder="Buscar issue no Linear (ex.: ENG-123)..." autocomplete="off" />
         <div id="linearList" class="combo-list" style="display:none"></div>
+=======
+      <div class="field">
+        <label for="dueDate">Prazo</label>
+        <input id="dueDate" type="datetime-local" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="tagInput">Tags</label>
+        <div class="combo">
+          <input id="tagInput" placeholder="Adicionar tag..." autocomplete="off" />
+          <div id="tagChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
+          <div id="tagList" class="combo-list" style="display:none"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="linear">Issues do Linear (opcional)</label>
+        <div class="combo">
+          <input id="linear" placeholder="Buscar issue (ex.: ENG-123)..." autocomplete="off" />
+          <div id="linearChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
+          <div id="linearList" class="combo-list" style="display:none"></div>
+        </div>
+>>>>>>> a65ab4e (Ajuste geral)
       </div>
     </div>
 
@@ -233,9 +429,110 @@
   </form>
 
   <footer>
+<<<<<<< HEAD
     <button type="button" class="btn ghost" id="cancel">Cancelar</button>
     <button type="submit" form="form" class="btn primary" id="submit">Criar ticket</button>
   </footer>
+=======
+    <button type="button" class="btn ghost" id="logout" style="margin-right:auto; color: var(--muted2);">Sair</button>
+    <button type="button" class="btn ghost" id="cancel">Cancelar</button>
+    <button type="submit" form="form" class="btn primary" id="submit">Criar ticket</button>
+  </footer>
+  </div>
+
+  <div id="consultPanel" style="display:none; flex:1; overflow-y:auto; padding:16px; flex-direction:column; gap:10px;">
+    <div id="ticketsListView" style="display:flex; flex-direction:column; gap:10px;">
+      <input id="ticketSearch" placeholder="🔍 Buscar por #, título, cliente..." autocomplete="off" />
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <button type="button" class="toggle-chip" id="filterMine">Atribuídos a mim</button>
+        <button type="button" class="btn-validate" id="refreshTickets" style="width:auto; margin:0; padding:6px 10px; font-size:12px;">↻ Atualizar</button>
+      </div>
+      <div id="ticketsMsg" class="validate-msg"></div>
+      <div id="ticketsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+
+    <!-- Visualização compacta e somente-leitura de 1 ticket: sem nenhuma
+         ação além de voltar pra lista (o "Fechar" do drawer, no cabeçalho,
+         continua disponível igual em qualquer tela). -->
+    <div id="ticketDetailView" style="display:none; flex-direction:column; gap:12px;">
+      <button type="button" class="btn ghost" id="ticketDetailBack" style="align-self:flex-start; padding:6px 10px;">← Voltar</button>
+      <div id="ticketDetailContent"></div>
+    </div>
+  </div>
+
+  <!-- Aba "Módulos": busca a empresa (nome/CNPJ/tenant — igual ao campo
+       "Empresa" da aba Criar, mesma rota) e mostra o identificador dela +
+       quais módulos do catálogo ela já tem contratados (empresas.modulo_ids).
+       Some com a empresa da conversa atual (Crisp) sozinha quando encontrada,
+       igual ao scanner de CNPJ da aba Criar. -->
+  <div id="modulesPanel" style="display:none; flex:1; overflow-y:auto; padding:16px; flex-direction:column; gap:10px;">
+    <div class="field">
+      <label for="moduleCompany">Empresa</label>
+      <div class="combo">
+        <div id="moduleCompanyChip" class="chip" style="display:none">
+          <span id="moduleCompanyChipName"></span>
+          <button type="button" class="x" id="moduleCompanyClear" title="Remover">&times;</button>
+        </div>
+        <input id="moduleCompany" placeholder="Buscar por nome, CNPJ ou tenant..." autocomplete="off" />
+        <div id="moduleCompanyList" class="combo-list" style="display:none"></div>
+      </div>
+    </div>
+    <div id="moduleCompanyMsg" class="validate-msg"></div>
+
+    <div id="moduleCompanyResult" style="display:none; flex-direction:column; gap:14px;">
+      <div class="search-result">
+        <div class="search-result__row">
+          <span class="search-result__label">Nome</span>
+          <span id="moduleResultName" class="search-result__value"></span>
+        </div>
+        <div class="search-result__row" id="moduleResultTenantRow">
+          <span class="search-result__label">Tenant</span>
+          <span id="moduleResultTenant" class="search-result__value"></span>
+        </div>
+        <div class="search-result__row" id="moduleResultCnpjRow">
+          <span class="search-result__label">CNPJ</span>
+          <span id="moduleResultCnpj" class="search-result__value"></span>
+        </div>
+      </div>
+      <div>
+        <p class="detail-row__label" style="margin-bottom:8px;">Módulos contratados</p>
+        <div id="moduleResultChips" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Aba "Contatos": agenda dos contatos cadastrados no sistema web — busca
+       por nome, empresa ou telefone (client-side, mesmo padrão da lista de
+       tickets da aba Consultar). Ao abrir um contato: botão pra ir até a
+       conversa salva (troca a URL da própria aba do Crisp, sem abrir aba
+       nova) e botão pra editar no sistema web (abre o /contacts de lá numa
+       aba nova, já com esse contato selecionado pra edição). -->
+  <div id="contactsPanel" style="display:none; flex:1; overflow-y:auto; padding:16px; flex-direction:column; gap:10px;">
+    <div id="contactsListView" style="display:flex; flex-direction:column; gap:10px;">
+      <input id="contactSearch" placeholder="🔍 Buscar por nome, empresa ou número..." autocomplete="off" />
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <span id="contactsCount" class="muted" style="font-size:12px;"></span>
+        <button type="button" class="btn-validate" id="refreshContacts" style="width:auto; margin:0; padding:6px 10px; font-size:12px;">↻ Atualizar</button>
+      </div>
+      <div id="contactsMsg" class="validate-msg"></div>
+      <div id="contactsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+
+    <div id="contactDetailView" style="display:none; flex-direction:column; gap:12px;">
+      <button type="button" class="btn ghost" id="contactDetailBack" style="align-self:flex-start; padding:6px 10px;">← Voltar</button>
+      <div id="contactDetailContent"></div>
+      <div style="display:flex; gap:8px;">
+        <div style="flex:1; min-width:0;">
+          <button type="button" class="btn-validate" id="contactOpenConversation" style="width:100%; margin-top:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">💬 Ir até a conversa</button>
+        </div>
+        <div style="flex:1; min-width:0;">
+          <button type="button" class="btn-validate" id="contactEditWeb" style="width:100%; margin-top:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">✏️ Editar no sistema</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+>>>>>>> a65ab4e (Ajuste geral)
 
   <script src="drawer.js"></script>
 </body>

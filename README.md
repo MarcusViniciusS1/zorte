@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Zorte Crisp — Atendimento e Etiquetas (unificada)
 
 **Versão: 5.0.0**
@@ -47,3 +48,6 @@ Arquivos: `tenant.js`, `drawer.html`, `drawer.js`.
 - Substitui as pastas `extension/`, `extenção/` e `penetra/` (podem ser
   removidas após confirmar que a unificada funciona).
 - Regra do projeto: a cada alteração de script, subir a `version` no manifest.
+=======
+# zorte-extensao
+>>>>>>> a65ab4e (Ajuste geral)

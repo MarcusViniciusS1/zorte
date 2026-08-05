@@ -10,12 +10,56 @@ const $ = (id) => document.getElementById(id);
 // precisa agir conforme o caso.
 const EMBEDDED = window.self !== window.top;
 function dismiss(type, extra) {
+<<<<<<< HEAD
+=======
+  // Avisa o background que o painel NATIVO fechou (ver "drawerOpen" em
+  // background.js) — é o que permite o atalho Ctrl+\ saber se deve abrir ou
+  // fechar. O fallback embutido (iframe) não entra nessa contagem: quem
+  // controla ele é o próprio tenant.js (ztDrawerWrap), sem envolver o
+  // background.
+  if (!EMBEDDED) {
+    try { chrome.runtime.sendMessage({ action: 'drawerClosed' }).catch(() => {}); } catch (e) {}
+  }
+>>>>>>> a65ab4e (Ajuste geral)
   if (EMBEDDED) {
     try { window.parent.postMessage({ source: 'zt-drawer', type: type || 'close', ...(extra || {}) }, '*'); } catch (e) {}
   } else {
     window.close();
   }
 }
+<<<<<<< HEAD
+=======
+if (!EMBEDDED) {
+  try { chrome.runtime.sendMessage({ action: 'drawerOpened' }).catch(() => {}); } catch (e) {}
+}
+
+// ---- Fecha sozinho se a aba ativa deixar de ser o Crisp ----
+// chrome.sidePanel.setOptions({enabled:false}) (ver background.js) não força
+// o fechamento de um painel que já está aberto — na prática, testado ao
+// vivo, o painel simplesmente ficava aberto pra sempre em qualquer outra
+// aba. Como o painel É uma página de extensão como outra qualquer, ele pode
+// se fechar sozinho (window.close()) assim que perceber que a aba ativa não
+// é mais uma conversa do Crisp — isso sim fecha de verdade.
+const CRISP_RE = /^https:\/\/app\.crisp\.chat\//;
+function isCrispUrl(url) {
+  return typeof url === 'string' && CRISP_RE.test(url);
+}
+async function closeIfTabIsNotCrisp() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const tab = tabs && tabs[0];
+    if (!tab || !isCrispUrl(tab.url)) dismiss('close');
+  } catch (e) { /* extensão recarregada — ignora */ }
+}
+if (chrome.tabs && chrome.tabs.onActivated) {
+  chrome.tabs.onActivated.addListener(closeIfTabIsNotCrisp);
+  chrome.tabs.onUpdated.addListener((tabId, info) => { if (info.url) closeIfTabIsNotCrisp(); });
+  chrome.windows.onFocusChanged.addListener((windowId) => {
+    if (windowId !== chrome.windows.WINDOW_ID_NONE) closeIfTabIsNotCrisp();
+  });
+}
+closeIfTabIsNotCrisp(); // checagem já na abertura (ex.: aberto via fallback numa aba errada)
+>>>>>>> a65ab4e (Ajuste geral)
 
 // ---- Ponte com o background ----
 function send(action, extra) {
@@ -27,6 +71,780 @@ function send(action, extra) {
   });
 }
 
+<<<<<<< HEAD
+=======
+// ---- Login (obrigatório) ----
+// Gate simples: enquanto não autenticado, mostra só o form de login e
+// esconde o resto (#appContent) — o resto do arquivo continua carregando
+// normalmente por baixo (getTags/getAttendants etc.), só não fica visível
+// nem alcançável até logar. Após logar com sucesso, recarrega a página pra
+// tudo (inclusive os listeners de baixo) rodar já com o token disponível.
+send('getAuthStatus', {}).then((r) => {
+  const authed = Boolean(r && r.ok && r.authed);
+  $('loginGate').style.display = authed ? 'none' : 'flex';
+  $('appContent').style.display = authed ? 'flex' : 'none';
+  // modeSwitch mora no <header> (fica visível em qualquer tela) mas só faz
+  // sentido depois de logado — mesma regra do appContent.
+  $('modeSwitch').style.display = authed ? 'flex' : 'none';
+});
+
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = $('loginEmail').value.trim();
+  const password = $('loginPassword').value;
+  if (!email || !password) return;
+  const btn = $('loginSubmit');
+  btn.disabled = true;
+  btn.textContent = 'Entrando...';
+  const r = await send('login', { email, password });
+  btn.disabled = false;
+  btn.textContent = 'Entrar';
+  if (!r || !r.ok) {
+    const err = $('loginError');
+    err.textContent = (r && r.error) || 'Falha no login.';
+    err.style.display = 'block';
+    return;
+  }
+  window.location.reload();
+});
+
+const logoutBtn = $('logout');
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', async () => {
+    await send('logout', {});
+    window.location.reload();
+  });
+}
+
+// ---- Alternar entre "Criar ticket" e "Consultar ticket" ----
+const STATUS_LABELS = { novo: 'Novo', assumido: 'Assumido', em_andamento: 'Em Andamento', aguardando: 'Aguardando', resolvido: 'Resolvido', fechado: 'Fechado' };
+const STATUS_COLORS = { novo: '#60a5fa', assumido: '#22d3ee', em_andamento: '#fbbf24', aguardando: '#c084fc', resolvido: '#34d399', fechado: '#9ca3af' };
+const PRIORITY_LABELS = { baixa: 'Baixa', media: 'Média', alta: 'Alta', urgente: 'Urgente' };
+const PRIORITY_COLORS = { baixa: '#9ca3af', media: '#60a5fa', alta: '#fbbf24', urgente: '#f87171' };
+// Maior prioridade primeiro na listagem (urgente = "crítica" no vocabulário
+// do pedido — o sistema não tem um 5º nível separado, urgente já é o topo).
+const PRIORITY_ORDER = { urgente: 0, alta: 1, media: 2, baixa: 3 };
+const CLOSED_STATUSES = new Set(['resolvido', 'fechado']);
+const CHANNEL_LABELS = { telefone: 'Telefone', email: 'E-mail', chat: 'Chat', whatsapp: 'WhatsApp', presencial: 'Presencial', api: 'API' };
+
+let ticketsLoaded = false;
+let openTickets = []; // último resultado carregado do backend, antes de busca/filtro
+let mineOnly = false;
+let myAttendantId = null;
+chrome.storage.local.get({ zt_attendant: null }).then(({ zt_attendant }) => {
+  myAttendantId = (zt_attendant && zt_attendant.id) || null;
+});
+
+function setMode(mode) {
+  const consult = mode === 'consult';
+  const modules = mode === 'modules';
+  const contacts = mode === 'contacts';
+  $('modeSwitch').classList.toggle('mode-switch--consult', consult);
+  $('modeSwitch').classList.toggle('mode-switch--modules', modules);
+  $('modeSwitch').classList.toggle('mode-switch--contacts', contacts);
+  $('modeCreate').classList.toggle('active', mode === 'create');
+  $('modeConsult').classList.toggle('active', consult);
+  $('modeModules').classList.toggle('active', modules);
+  $('modeContacts').classList.toggle('active', contacts);
+  $('createPanel').style.display = mode === 'create' ? 'contents' : 'none';
+  $('consultPanel').style.display = consult ? 'flex' : 'none';
+  $('modulesPanel').style.display = modules ? 'flex' : 'none';
+  $('contactsPanel').style.display = contacts ? 'flex' : 'none';
+  // Sempre volta pra lista ao entrar em "Consultar" — não deixa preso numa
+  // visualização compacta de um ticket de uma visita anterior.
+  $('ticketDetailView').style.display = 'none';
+  $('ticketsListView').style.display = 'flex';
+  if (consult && !ticketsLoaded) loadOpenTickets();
+
+  if (modules) {
+    if (!modulesLoaded) loadModules();
+    autoFillModuleCompany();
+  }
+
+  if (contacts) {
+    // Mesma regra da lista de tickets: sempre volta pra lista ao entrar na
+    // aba, nunca preso no detalhe de um contato de uma visita anterior.
+    $('contactDetailView').style.display = 'none';
+    $('contactsListView').style.display = 'flex';
+    if (!contactsLoaded) loadContacts();
+  }
+}
+$('modeCreate').addEventListener('click', () => setMode('create'));
+$('modeConsult').addEventListener('click', () => setMode('consult'));
+$('modeModules').addEventListener('click', () => setMode('modules'));
+$('modeContacts').addEventListener('click', () => setMode('contacts'));
+
+// Badges de prioridade/status/issue do Linear — usado tanto na linha da
+// lista quanto no topo da visualização compacta de 1 ticket.
+function buildTicketBadges(t) {
+  const meta = document.createElement('div');
+  meta.className = 'ticket-row__meta';
+
+  const priority = document.createElement('span');
+  priority.className = 'status-pill';
+  const pColor = PRIORITY_COLORS[t.priority] || PRIORITY_COLORS.media;
+  priority.style.color = pColor;
+  priority.style.background = `${pColor}22`;
+  priority.textContent = PRIORITY_LABELS[t.priority] || t.priority || '—';
+  meta.appendChild(priority);
+
+  const status = document.createElement('span');
+  status.className = 'status-pill';
+  const color = STATUS_COLORS[t.status] || STATUS_COLORS.novo;
+  status.style.color = color;
+  status.style.background = `${color}22`;
+  status.textContent = STATUS_LABELS[t.status] || t.status || '—';
+  meta.appendChild(status);
+
+  if (Array.isArray(t.linear_issue_ids) && t.linear_issue_ids.length) {
+    const issue = document.createElement('span');
+    issue.className = 'linear-chip';
+    issue.style.padding = '2px 8px';
+    issue.textContent = t.linear_issue_ids.join(', ');
+    meta.appendChild(issue);
+  }
+
+  return meta;
+}
+
+function renderTicketRow(t) {
+  const row = document.createElement('button');
+  row.type = 'button';
+  row.className = 'ticket-row';
+  row.style.width = '100%';
+  row.style.font = 'inherit';
+  row.addEventListener('click', () => showTicketDetail(t));
+
+  const top = document.createElement('div');
+  top.className = 'ticket-row__top';
+  const subject = document.createElement('span');
+  subject.className = 'ticket-row__subject';
+  subject.textContent = t.subject || '(sem assunto)';
+  const number = document.createElement('span');
+  number.className = 'ticket-row__number';
+  number.textContent = t.ticket_number ? `#${t.ticket_number}` : '';
+  top.appendChild(subject);
+  top.appendChild(number);
+
+  const meta = buildTicketBadges(t);
+  if (t.company && t.company.name) {
+    const company = document.createElement('span');
+    company.textContent = t.company.name;
+    meta.appendChild(company);
+  }
+  if (t.attendant && t.attendant.name) {
+    const attendant = document.createElement('span');
+    attendant.textContent = t.attendant.name;
+    meta.appendChild(attendant);
+  }
+
+  row.appendChild(top);
+  row.appendChild(meta);
+  return row;
+}
+
+function detailRow(label, value) {
+  const row = document.createElement('div');
+  row.className = 'detail-row';
+  const dt = document.createElement('span');
+  dt.className = 'detail-row__label';
+  dt.textContent = label;
+  const dd = document.createElement('span');
+  dd.className = 'detail-row__value';
+  dd.textContent = value || '—';
+  row.appendChild(dt);
+  row.appendChild(dd);
+  return row;
+}
+
+// Visualização compacta e somente-leitura de 1 ticket: só dados, nenhuma
+// ação (nem editar, nem abrir link externo) — a única navegação daqui é o
+// botão "Voltar" (pra lista) ou o "Fechar" do drawer, no cabeçalho.
+function showTicketDetail(t) {
+  const content = $('ticketDetailContent');
+  content.innerHTML = '';
+
+  const title = document.createElement('h3');
+  title.className = 'detail-title';
+  title.textContent = t.subject || '(sem assunto)';
+  content.appendChild(title);
+
+  const badges = buildTicketBadges(t);
+  badges.style.marginTop = '8px';
+  content.appendChild(badges);
+
+  const fields = document.createElement('div');
+  fields.style.marginTop = '10px';
+  fields.appendChild(detailRow('Ticket', t.ticket_number ? `#${t.ticket_number}` : null));
+  fields.appendChild(detailRow('Empresa', t.company && t.company.name));
+  fields.appendChild(detailRow('Contato', t.nome_contato || (t.contact && t.contact.name)));
+  fields.appendChild(detailRow('Telefone', t.telefone_contato));
+  fields.appendChild(detailRow('Atendente', t.attendant && t.attendant.name));
+  fields.appendChild(detailRow('Canal', CHANNEL_LABELS[t.channel] || t.channel));
+  fields.appendChild(detailRow('Criado em', t.created_at ? new Date(t.created_at).toLocaleString('pt-BR') : null));
+  fields.appendChild(detailRow('Prazo', t.due_date ? new Date(t.due_date).toLocaleString('pt-BR') : null));
+  content.appendChild(fields);
+
+  if (t.description) {
+    const descLabel = document.createElement('div');
+    descLabel.className = 'detail-row__label';
+    descLabel.style.marginTop = '10px';
+    descLabel.textContent = 'Descrição';
+    const desc = document.createElement('p');
+    desc.className = 'detail-description';
+    desc.textContent = t.description;
+    content.appendChild(descLabel);
+    content.appendChild(desc);
+  }
+
+  if (Array.isArray(t.tags) && t.tags.length) {
+    const tagsLabel = document.createElement('div');
+    tagsLabel.className = 'detail-row__label';
+    tagsLabel.style.marginTop = '10px';
+    tagsLabel.textContent = 'Tags';
+    content.appendChild(tagsLabel);
+    const tagsWrap = document.createElement('div');
+    tagsWrap.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;';
+    for (const tag of t.tags) {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip';
+      chip.textContent = tag;
+      tagsWrap.appendChild(chip);
+    }
+    content.appendChild(tagsWrap);
+  }
+
+  // ---- Notas — único ponto de escrita desse detalhe (o resto é só
+  // leitura). Autor é sempre o atendente logado nesta extensão
+  // (myAttendantId, mesmo mecanismo do resto do drawer).
+  const notesLabel = document.createElement('div');
+  notesLabel.className = 'detail-row__label';
+  notesLabel.style.marginTop = '14px';
+  notesLabel.textContent = 'Notas';
+  content.appendChild(notesLabel);
+
+  const notesList = document.createElement('div');
+  notesList.style.marginTop = '8px';
+  content.appendChild(notesList);
+  loadTicketNotes(t.id, notesList);
+
+  const noteInput = document.createElement('textarea');
+  noteInput.placeholder = 'Adicionar nota...';
+  noteInput.style.cssText = 'margin-top:10px; min-height:60px;';
+  content.appendChild(noteInput);
+
+  const noteMsg = document.createElement('div');
+  noteMsg.className = 'validate-msg';
+  content.appendChild(noteMsg);
+
+  const noteBtn = document.createElement('button');
+  noteBtn.type = 'button';
+  noteBtn.className = 'btn-validate';
+  noteBtn.style.marginTop = '0';
+  noteBtn.textContent = '+ Adicionar nota';
+  noteBtn.addEventListener('click', async () => {
+    const text = noteInput.value.trim();
+    if (!text) return;
+    noteBtn.disabled = true;
+    noteMsg.textContent = '';
+    noteMsg.className = 'validate-msg';
+    const r = await send('createTicketNote', {
+      ticket_id: t.id,
+      attendant_id: myAttendantId || null,
+      note: text,
+      is_internal: true,
+    });
+    noteBtn.disabled = false;
+    if (r && r.ok) {
+      noteInput.value = '';
+      loadTicketNotes(t.id, notesList);
+    } else {
+      noteMsg.textContent = (r && r.error) || 'Não foi possível salvar a nota.';
+      noteMsg.className = 'validate-msg warn';
+    }
+  });
+  content.appendChild(noteBtn);
+
+  $('ticketsListView').style.display = 'none';
+  $('ticketDetailView').style.display = 'flex';
+}
+
+// Busca as notas do ticket e desenha na lista (chamado ao abrir o detalhe e
+// de novo depois de adicionar uma nova, pra já aparecer na hora).
+async function loadTicketNotes(ticketId, container) {
+  container.innerHTML = '';
+  const loading = document.createElement('p');
+  loading.className = 'muted';
+  loading.style.fontSize = '12.5px';
+  loading.textContent = 'Carregando notas...';
+  container.appendChild(loading);
+
+  const r = await send('getTicketNotes', { ticketId });
+  container.innerHTML = '';
+
+  if (!r || !r.ok) {
+    const msg = document.createElement('p');
+    msg.className = 'validate-msg warn';
+    msg.textContent = (r && r.error) || 'Não foi possível carregar as notas.';
+    container.appendChild(msg);
+    return;
+  }
+
+  const notes = (r.data && r.data.data) || [];
+  if (!notes.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.style.fontSize = '12.5px';
+    empty.textContent = 'Nenhuma nota ainda.';
+    container.appendChild(empty);
+    return;
+  }
+
+  for (const n of notes) {
+    const item = document.createElement('div');
+    item.style.cssText = 'padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--card); margin-bottom:6px;';
+
+    const head = document.createElement('div');
+    head.style.cssText = 'display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--muted); margin-bottom:4px;';
+    const author = document.createElement('span');
+    author.textContent = (n.attendant && n.attendant.name) || 'Sistema';
+    const when = document.createElement('span');
+    when.textContent = n.created_at ? new Date(n.created_at).toLocaleString('pt-BR') : '';
+    head.appendChild(author);
+    head.appendChild(when);
+
+    const text = document.createElement('p');
+    text.style.cssText = 'margin:0; font-size:13px; white-space:pre-wrap; word-break:break-word;';
+    text.textContent = n.note;
+
+    item.appendChild(head);
+    item.appendChild(text);
+    container.appendChild(item);
+  }
+}
+
+$('ticketDetailBack').addEventListener('click', () => {
+  $('ticketDetailView').style.display = 'none';
+  $('ticketsListView').style.display = 'flex';
+});
+
+// Busca por #, título, cliente (empresa/contato) ou palavra-chave na
+// descrição — tudo client-side, em cima do que já foi carregado.
+function matchesSearch(t, q) {
+  if (!q) return true;
+  const haystack = [
+    t.ticket_number != null ? String(t.ticket_number) : '',
+    t.subject || '',
+    t.description || '',
+    t.company && t.company.name,
+    t.nome_contato || '',
+    t.contact && t.contact.name,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return haystack.includes(q);
+}
+
+function renderTicketsList() {
+  const list = $('ticketsList');
+  const msg = $('ticketsMsg');
+  list.innerHTML = '';
+
+  const q = $('ticketSearch').value.trim().toLowerCase();
+  let filtered = openTickets.filter((t) => matchesSearch(t, q));
+  if (mineOnly) filtered = filtered.filter((t) => t.attendant_id === myAttendantId);
+
+  // Maior prioridade primeiro; empate desempata por mais recente.
+  filtered.sort((a, b) => {
+    const pa = PRIORITY_ORDER[a.priority] ?? 99;
+    const pb = PRIORITY_ORDER[b.priority] ?? 99;
+    if (pa !== pb) return pa - pb;
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+
+  if (!filtered.length) {
+    msg.textContent = openTickets.length ? 'Nenhum ticket encontrado com esse filtro.' : 'Nenhum ticket em aberto.';
+    msg.className = 'validate-msg';
+    return;
+  }
+  msg.textContent = '';
+  for (const t of filtered) list.appendChild(renderTicketRow(t));
+}
+$('ticketSearch').addEventListener('input', renderTicketsList);
+$('filterMine').addEventListener('click', () => {
+  mineOnly = !mineOnly;
+  $('filterMine').classList.toggle('active', mineOnly);
+  renderTicketsList();
+});
+
+async function loadOpenTickets() {
+  const msg = $('ticketsMsg');
+  const list = $('ticketsList');
+  const btn = $('refreshTickets');
+  msg.textContent = '';
+  msg.className = 'validate-msg';
+  btn.disabled = true;
+  list.innerHTML = '';
+
+  const r = await send('getOpenTickets', {});
+  btn.disabled = false;
+
+  if (!r || !r.ok) {
+    msg.textContent = (r && r.error) || 'Não foi possível carregar os tickets.';
+    msg.className = 'validate-msg warn';
+    return;
+  }
+
+  const all = (r.data && r.data.data) || [];
+  openTickets = all.filter((t) => !CLOSED_STATUSES.has(t.status));
+  ticketsLoaded = true;
+  renderTicketsList();
+}
+$('refreshTickets').addEventListener('click', loadOpenTickets);
+
+// ---- Contatos (aba "Contatos" — agenda: busca por nome, empresa ou
+// telefone entre todos os contatos cadastrados no sistema web). Mesmo padrão
+// de lista+detalhe da aba Consultar. Endereço do sistema web usado pelo
+// botão "Editar no sistema" — mesmo host dos content_scripts/host_permissions
+// do manifest (ver web-bridge.js).
+const WEB_APP_URL = 'http://192.168.0.104:5173';
+
+let contactsLoaded = false;
+let allContacts = [];
+
+function matchesContactSearch(c, q, qDigits) {
+  if (!q) return true;
+  const haystack = [c.name || '', (c.company && c.company.name) || '', c.email || '']
+    .filter(Boolean).join(' ').toLowerCase();
+  if (haystack.includes(q)) return true;
+  if (qDigits) {
+    const phoneDigits = onlyDigits(c.phone || '');
+    if (phoneDigits && phoneDigits.includes(qDigits)) return true;
+  }
+  return false;
+}
+
+function renderContactRow(c) {
+  // <div> (não <button>) porque o botão de chat no canto precisa ser um
+  // elemento clicável próprio — botão dentro de botão não é válido em HTML e
+  // o clique do filho vazaria pro pai mesmo com stopPropagation em alguns
+  // navegadores.
+  const row = document.createElement('div');
+  row.className = 'ticket-row';
+  row.style.width = '100%';
+  row.style.position = 'relative';
+  row.style.cursor = 'pointer';
+
+  const clickArea = document.createElement('div');
+  if (c.conversation_url) clickArea.style.paddingRight = '30px';
+  clickArea.addEventListener('click', () => showContactDetail(c));
+
+  const top = document.createElement('div');
+  top.className = 'ticket-row__top';
+  const name = document.createElement('span');
+  name.className = 'ticket-row__subject';
+  name.textContent = c.name || '(sem nome)';
+  top.appendChild(name);
+
+  const meta = document.createElement('div');
+  meta.className = 'ticket-row__meta';
+  if (c.company && c.company.name) {
+    const company = document.createElement('span');
+    company.textContent = c.company.name;
+    meta.appendChild(company);
+  }
+  if (c.phone) {
+    const phone = document.createElement('span');
+    phone.textContent = c.phone;
+    meta.appendChild(phone);
+  }
+  clickArea.appendChild(top);
+  clickArea.appendChild(meta);
+  row.appendChild(clickArea);
+
+  // Botão de chat no canto — só aparece pra quem tem link de conversa
+  // salvo, atalho pra ir direto sem precisar abrir o detalhe do contato.
+  if (c.conversation_url) {
+    const chatBtn = document.createElement('button');
+    chatBtn.type = 'button';
+    chatBtn.title = 'Ir até a conversa';
+    chatBtn.textContent = '💬';
+    chatBtn.style.cssText =
+      'position:absolute; top:8px; right:8px; width:26px; height:26px; padding:0;' +
+      'display:flex; align-items:center; justify-content:center; font-size:13px; line-height:1;' +
+      'background:rgba(239,68,68,.15); border:1px solid rgba(239,68,68,.35); color:#f87171;' +
+      'border-radius:7px; cursor:pointer;';
+    chatBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openConversationInSameTab(c.conversation_url);
+    });
+    row.appendChild(chatBtn);
+  }
+
+  return row;
+}
+
+function renderContactsList() {
+  const list = $('contactsList');
+  const msg = $('contactsMsg');
+  const count = $('contactsCount');
+  list.innerHTML = '';
+
+  const q = $('contactSearch').value.trim().toLowerCase();
+  const qDigits = onlyDigits($('contactSearch').value);
+  const filtered = allContacts.filter((c) => matchesContactSearch(c, q, qDigits));
+
+  count.textContent = `${filtered.length} de ${allContacts.length} contato(s)`;
+
+  if (!filtered.length) {
+    msg.textContent = allContacts.length ? 'Nenhum contato encontrado com essa busca.' : 'Nenhum contato cadastrado.';
+    msg.className = 'validate-msg';
+    return;
+  }
+  msg.textContent = '';
+  for (const c of filtered) list.appendChild(renderContactRow(c));
+}
+$('contactSearch').addEventListener('input', renderContactsList);
+
+async function loadContacts() {
+  const msg = $('contactsMsg');
+  const list = $('contactsList');
+  const btn = $('refreshContacts');
+  msg.textContent = '';
+  msg.className = 'validate-msg';
+  btn.disabled = true;
+  list.innerHTML = '';
+
+  const r = await send('getContacts', {});
+  btn.disabled = false;
+
+  if (!r || !r.ok) {
+    msg.textContent = (r && r.error) || 'Não foi possível carregar os contatos.';
+    msg.className = 'validate-msg warn';
+    return;
+  }
+
+  allContacts = (r.data && r.data.data) || [];
+  contactsLoaded = true;
+  renderContactsList();
+}
+$('refreshContacts').addEventListener('click', loadContacts);
+
+// Troca a URL da própria aba do Crisp pra ir direto pra conversa salva —
+// "mesma guia" pedido: não abre aba nova, só navega a aba ativa/focada (é
+// justamente a aba do Crisp de onde o painel foi aberto).
+async function openConversationInSameTab(url) {
+  if (!url) return;
+  try {
+    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const tab = tabs && tabs[0];
+    if (tab && tab.id != null) {
+      await chrome.tabs.update(tab.id, { url });
+      return;
+    }
+  } catch (e) {
+    console.warn('[Zorte Crisp] Não consegui trocar a aba ativa pra conversa.', e && e.message);
+  }
+  window.open(url, '_blank'); // fallback: nenhuma aba ativa encontrada
+}
+
+function showContactDetail(c) {
+  const content = $('contactDetailContent');
+  content.innerHTML = '';
+
+  const title = document.createElement('h3');
+  title.className = 'detail-title';
+  title.textContent = c.name || '(sem nome)';
+  content.appendChild(title);
+
+  const fields = document.createElement('div');
+  fields.style.marginTop = '10px';
+  fields.appendChild(detailRow('E-mail', c.email));
+  fields.appendChild(detailRow('Telefone', c.phone));
+  fields.appendChild(detailRow('Cargo', c.position));
+  fields.appendChild(detailRow('Empresa', c.company && c.company.name));
+  fields.appendChild(detailRow('Cadastrado em', c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : null));
+  content.appendChild(fields);
+
+  if (c.notes) {
+    const notesLabel = document.createElement('div');
+    notesLabel.className = 'detail-row__label';
+    notesLabel.style.marginTop = '10px';
+    notesLabel.textContent = 'Observações';
+    const notes = document.createElement('p');
+    notes.className = 'detail-description';
+    notes.textContent = c.notes;
+    content.appendChild(notesLabel);
+    content.appendChild(notes);
+  }
+
+  const openBtn = $('contactOpenConversation');
+  openBtn.disabled = !c.conversation_url;
+  openBtn.title = c.conversation_url ? '' : 'Sem link de conversa salvo pra esse contato';
+  openBtn.onclick = () => openConversationInSameTab(c.conversation_url);
+
+  $('contactEditWeb').onclick = () => window.open(`${WEB_APP_URL}/contacts?edit=${encodeURIComponent(c.id)}`, '_blank');
+
+  $('contactsListView').style.display = 'none';
+  $('contactDetailView').style.display = 'flex';
+}
+$('contactDetailBack').addEventListener('click', () => {
+  $('contactDetailView').style.display = 'none';
+  $('contactsListView').style.display = 'flex';
+});
+
+// ---- Módulos (aba "Módulos" — busca a EMPRESA, igual ao campo "Empresa" da
+// aba Criar, e mostra o identificador dela + os módulos do catálogo que ela
+// já tem contratados, cruzando empresas.modulo_ids com o catálogo /modules.
+// Some sozinha com a empresa da conversa atual (Crisp), igual ao scanner de
+// CNPJ da aba Criar — busca manual é só o fallback/troca. Somente consulta,
+// sem marcar/desmarcar módulo por aqui (isso é feito na página da empresa no
+// sistema web). ----
+const CATEGORY_COLORS = { adicionais: '#60a5fa', fiscal: '#fbbf24', operacional: '#34d399' };
+
+let modulesLoaded = false;
+let allModules = [];
+let moduleCompanyId = '';
+let moduleSearchTimer = null;
+let pendingModuleIds = null; // module_ids da empresa selecionada, à espera do catálogo carregar
+
+function formatModulePrice(m) {
+  const isFixed = Number(m.price_type) === 0;
+  const raw = isFixed ? m.fixed_value : m.unit_value;
+  if (raw == null) return '—';
+  const value = Number(raw).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return isFixed ? `${value}/mês` : `${value}/${m.unit || 'unidade'}`;
+}
+
+function moduleCategoryLabel(m) {
+  const cat = (m.category || '').trim();
+  if (!cat) return null;
+  return cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase();
+}
+
+function renderCompanyModuleChips(moduleIds) {
+  pendingModuleIds = Array.isArray(moduleIds) ? moduleIds : [];
+  const box = $('moduleResultChips');
+  box.innerHTML = '';
+
+  if (!modulesLoaded) {
+    const loading = document.createElement('p');
+    loading.className = 'muted';
+    loading.style.fontSize = '12.5px';
+    loading.textContent = 'Carregando catálogo de módulos...';
+    box.appendChild(loading);
+    return;
+  }
+
+  const mods = allModules.filter((m) => pendingModuleIds.includes(m.id));
+  if (!mods.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.style.fontSize = '12.5px';
+    empty.textContent = 'Nenhum módulo adicional contratado.';
+    box.appendChild(empty);
+    return;
+  }
+  for (const m of mods) {
+    const catLabel = moduleCategoryLabel(m);
+    const color = (catLabel && CATEGORY_COLORS[catLabel.toLowerCase()]) || '#a1a1aa';
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.title = formatModulePrice(m);
+    chip.style.cssText = `background:${color}18; border:1px solid ${color}55; color:${color};`;
+    const dot = document.createElement('span');
+    dot.style.cssText = `width:6px; height:6px; flex-shrink:0; border-radius:999px; background:${color}; display:inline-block;`;
+    chip.appendChild(dot);
+    chip.appendChild(document.createTextNode(m.name));
+    box.appendChild(chip);
+  }
+}
+
+function clearModuleCompany() {
+  moduleCompanyId = '';
+  pendingModuleIds = null;
+  $('moduleCompanyChip').style.display = 'none';
+  $('moduleCompany').style.display = '';
+  $('moduleCompany').value = '';
+  $('moduleCompanyList').style.display = 'none';
+  $('moduleCompanyResult').style.display = 'none';
+  $('moduleCompanyMsg').textContent = '';
+}
+
+function selectModuleCompany(c) {
+  if (!c || !c.id) return;
+  moduleCompanyId = c.id;
+  const detalhes = [c.tenant, c.document ? `CNPJ ${c.document}` : null].filter(Boolean);
+  $('moduleCompanyChipName').textContent = c.name + (detalhes.length ? ` · ${detalhes.join(' · ')}` : '');
+  $('moduleCompanyChip').style.display = 'flex';
+  $('moduleCompany').style.display = 'none';
+  $('moduleCompanyList').style.display = 'none';
+  $('moduleCompanyMsg').textContent = '';
+
+  const tenant = c.tenant && (c.tenant.name || c.tenant);
+  $('moduleResultName').textContent = c.name || '—';
+  $('moduleResultTenantRow').style.display = tenant ? 'flex' : 'none';
+  $('moduleResultTenant').textContent = tenant || '';
+  $('moduleResultCnpjRow').style.display = c.document ? 'flex' : 'none';
+  $('moduleResultCnpj').textContent = c.document || '';
+  $('moduleCompanyResult').style.display = 'flex';
+
+  renderCompanyModuleChips(c.module_ids);
+}
+
+function renderModuleCompanyList(results) {
+  const box = $('moduleCompanyList');
+  box.innerHTML = '';
+  if (!results.length) { box.style.display = 'none'; return; }
+  for (const c of results) {
+    const item = document.createElement('div');
+    item.className = 'combo-item';
+    const nm = document.createElement('div');
+    nm.className = 'nm';
+    nm.textContent = c.name;
+    const mt = document.createElement('div');
+    mt.className = 'mt';
+    mt.textContent = (c.document ? `CNPJ ${c.document}` : 'Sem CNPJ') + (c.tenant ? ` · ${c.tenant}` : '');
+    item.appendChild(nm);
+    item.appendChild(mt);
+    item.addEventListener('mousedown', (e) => { e.preventDefault(); selectModuleCompany(c); });
+    box.appendChild(item);
+  }
+  box.style.display = 'block';
+}
+
+$('moduleCompany').addEventListener('input', () => {
+  const q = $('moduleCompany').value.trim();
+  clearTimeout(moduleSearchTimer);
+  if (!q) { $('moduleCompanyList').style.display = 'none'; return; }
+  moduleSearchTimer = setTimeout(async () => {
+    const r = await send('searchCompany', { query: q });
+    if (r && r.ok) renderModuleCompanyList((r.data && r.data.results) || []);
+  }, 250);
+});
+$('moduleCompany').addEventListener('blur', () => setTimeout(() => { $('moduleCompanyList').style.display = 'none'; }, 150));
+$('moduleCompanyClear').addEventListener('click', clearModuleCompany);
+
+// Preenche sozinha com a empresa já identificada na conversa atual do Crisp
+// (mesmo resultado usado pra preencher a aba Criar) — só na primeira vez que
+// a aba é aberta, sem sobrescrever uma busca manual já feita pelo atendente.
+function autoFillModuleCompany() {
+  if (moduleCompanyId) return;
+  if (lastContext && lastContext.found && lastContext.data) selectModuleCompany(lastContext.data);
+}
+
+async function loadModules() {
+  const r = await send('getModules', {});
+  if (!r || !r.ok) {
+    $('moduleCompanyMsg').textContent = (r && r.error) || 'Não foi possível carregar o catálogo de módulos.';
+    $('moduleCompanyMsg').className = 'validate-msg warn';
+    return;
+  }
+  const all = (r.data && r.data.data) || [];
+  allModules = all.filter((m) => !m.deleted_at);
+  modulesLoaded = true;
+  if (pendingModuleIds) renderCompanyModuleChips(pendingModuleIds);
+}
+
+>>>>>>> a65ab4e (Ajuste geral)
 function showError(text) {
   const el = $('error');
   if (!text) { el.style.display = 'none'; el.textContent = ''; el.className = 'error'; return; }
@@ -86,8 +904,13 @@ function clearCompany() {
 function selectCompany(c) {
   if (!c || !c.id) return;
   companyId = c.id;
+<<<<<<< HEAD
   $('companyChipName').textContent =
     c.name + (c.tenant ? ` · ${c.tenant}` : c.document ? ` · CNPJ ${c.document}` : '');
+=======
+  const detalhes = [c.tenant, c.document ? `CNPJ ${c.document}` : null].filter(Boolean);
+  $('companyChipName').textContent = c.name + (detalhes.length ? ` · ${detalhes.join(' · ')}` : '');
+>>>>>>> a65ab4e (Ajuste geral)
   $('companyChip').style.display = 'flex';
   $('company').style.display = 'none';
   $('companyList').style.display = 'none';
@@ -108,6 +931,29 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
         msg.className = 'validate-msg ok';
       }
     }
+<<<<<<< HEAD
+=======
+    // Mesmo aviso também preenche sozinho a aba "Módulos", se ainda não tiver
+    // empresa selecionada lá (busca manual independente da aba Criar).
+    if (request && request.action === 'cnpjMatchFound' && request.company && !moduleCompanyId) {
+      selectModuleCompany(request.company);
+    }
+    // Pedido do background pra se fechar (atalho Ctrl+\ apertado de novo
+    // com o painel já aberto — ver toggleSidePanel em background.js).
+    if (request && request.action === 'closeDrawer') {
+      dismiss('close');
+    }
+
+    // Trocou de conversa no Crisp (ver notifyIfConversationChanged em
+    // tenant.js) — limpa os dados do cliente ANTERIOR (nome, telefone,
+    // e-mail, empresa, tags, issues...) e recarrega o contexto da conversa
+    // nova, senão o ticket sairia com informação do cliente errado.
+    if (request && request.action === 'conversationChanged') {
+      resetCreateForm();
+      clearModuleCompany();
+      send('getContext', {}).then((r) => { lastContext = r; applyContext(r, { fillCompany: true }); });
+    }
+>>>>>>> a65ab4e (Ajuste geral)
   });
 }
 
@@ -153,6 +999,10 @@ function applyContext(r, { fillCompany }) {
     if (!$('subject').value.trim()) $('subject').value = `Atendimento - ${ex.name}`;
   }
   if (ex.phone && !$('phone').value) $('phone').value = maskPhone(ex.phone);
+<<<<<<< HEAD
+=======
+  if (ex.email && !$('email').value) $('email').value = ex.email;
+>>>>>>> a65ab4e (Ajuste geral)
   if (ex.url && !$('url').value) $('url').value = ex.url;
   // Canal/origem detectado (Chat, WhatsApp...): só na abertura, para não
   // sobrescrever uma escolha manual do usuário numa revalidação.
@@ -166,11 +1016,59 @@ function applyContext(r, { fillCompany }) {
       document: r.data.document || r.data.documento,
       tenant: r.data.tenant,
     });
+<<<<<<< HEAD
   }
 }
 
 // Ao abrir o painel, puxa o contexto da conversa atual.
 send('getContext', {}).then((r) => applyContext(r, { fillCompany: true }));
+=======
+    renderSearchResult(r.data);
+  }
+}
+
+// Limpa o formulário de "Criar ticket" inteiro — chamado quando o atendente
+// troca de conversa no Crisp (ver notifyIfConversationChanged em tenant.js),
+// pra não deixar dado do cliente ANTERIOR (nome/telefone/e-mail/empresa)
+// vazando pro ticket da conversa nova. Os campos referenciados aqui (tags,
+// linear, empresa) são declarados mais abaixo neste mesmo script, mas isso é
+// seguro: esta função só é CHAMADA de fato depois que o script todo já
+// rodou (por um evento assíncrono), quando todas as declarações já existem.
+function resetCreateForm() {
+  $('subject').value = '';
+  $('name').value = '';
+  $('phone').value = '';
+  $('email').value = '';
+  $('url').value = '';
+  $('description').value = '';
+  $('status').value = 'novo';
+  $('sistema').value = 'Z';
+  $('canal').value = 'chat';
+  if (typeof updateEmailRequiredHint === 'function') updateEmailRequiredHint();
+  $('attendant').value = '';
+  $('priority').value = 'media';
+  $('dueDate').value = '';
+  dueDateTouched = false;
+  clearCompany();
+  selectedTags = [];
+  renderTagChips();
+  linkedIssues = [];
+  renderLinearChips();
+  $('linear').value = '';
+  showError('');
+  $('summarizeMsg').textContent = '';
+  $('summarizeMsg').className = 'validate-msg';
+  $('createContactMsg').textContent = '';
+  $('createContactMsg').className = 'validate-msg';
+}
+
+// Guarda o último contexto lido (inclui websiteId/sessionId da conversa
+// aberta) pra "Resumir com IA" não precisar reler o DOM do Crisp de novo.
+let lastContext = null;
+
+// Ao abrir o painel, puxa o contexto da conversa atual.
+send('getContext', {}).then((r) => { lastContext = r; applyContext(r, { fillCompany: true }); });
+>>>>>>> a65ab4e (Ajuste geral)
 
 // ---- Card de resultado da busca (Nome / Tenant / CNPJ / Cliente Novo) ----
 function hideSearchResult() {
@@ -210,6 +1108,10 @@ $('validate').addEventListener('click', async () => {
   hideSearchResult();
   setValidating(true);
   const r = await send('getContext', {});
+<<<<<<< HEAD
+=======
+  lastContext = r;
+>>>>>>> a65ab4e (Ajuste geral)
   setValidating(false);
   if (!r || !r.ok) {
     msg.textContent = r && r.error === 'not-crisp'
@@ -236,6 +1138,201 @@ $('validate').addEventListener('click', async () => {
   }
 });
 
+<<<<<<< HEAD
+=======
+// ---- Resumir com IA (Gemini) ----
+// Lê as mensagens de HOJE direto do HTML da conversa aberta no Crisp (via
+// tenant.js) e preenche os campos do ticket — não fala com a API do Crisp,
+// só com o texto que já está na tela.
+const AI_CONFIDENCE_THRESHOLD = 80;
+
+$('summarize').addEventListener('click', async () => {
+  const msg = $('summarizeMsg');
+  const btn = $('summarize');
+  msg.textContent = '';
+  msg.className = 'validate-msg';
+
+  let ctx = lastContext;
+  if (!ctx || !ctx.websiteId || !ctx.sessionId) {
+    ctx = await send('getContext', {});
+    lastContext = ctx;
+  }
+  if (!ctx || !ctx.ok || !ctx.websiteId || !ctx.sessionId) {
+    msg.textContent = 'Abra uma conversa no Crisp e tente de novo.';
+    msg.className = 'validate-msg warn';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Resumindo conversa...';
+  const r = await send('summarizeCrisp', {});
+  btn.disabled = false;
+  btn.textContent = '✨ Resumir com IA e preencher';
+
+  const data = r && r.data;
+  if (!r || !r.ok || !data || data.ok === false) {
+    msg.textContent = (data && (data.error || data.reason)) || (r && r.error) || 'Não foi possível resumir a conversa.';
+    msg.className = 'validate-msg warn';
+    return;
+  }
+
+  if (data.subject) $('subject').value = data.subject;
+  if (data.description) $('description').value = data.description;
+  if (data.priority) {
+    $('priority').value = data.priority;
+    if (!dueDateTouched) $('dueDate').value = toInputValue(suggestDueDate(data.priority));
+  }
+  if (data.contact_name) $('name').value = data.contact_name;
+  if (data.phone) $('phone').value = maskPhone(data.phone);
+  if (data.company && data.company.id) selectCompany({ id: data.company.id, name: data.company.name });
+  if (data.attendant && data.attendant.id) $('attendant').value = data.attendant.id;
+  if (Array.isArray(data.tag_suggestions)) {
+    // addTag() só adiciona ao ticket; se a IA sugerir uma tag que ainda não
+    // existe no catálogo, precisa de createAndAddTag() pra também cadastrar
+    // ela em "etiquetas" — senão a tag fica usada em tickets de verdade mas
+    // nunca aparece na tela "/tags" (só lê o catálogo).
+    for (const t of data.tag_suggestions) {
+      const n = (t || '').trim();
+      if (!n) continue;
+      const existsInCatalog = tagCatalog.some((c) => c.name.toLowerCase() === n.toLowerCase());
+      if (existsInCatalog) addTag(n);
+      else await createAndAddTag(n);
+    }
+  }
+  if (data.linear_search_keywords) {
+    $('linear').value = data.linear_search_keywords;
+    searchLinear();
+  }
+
+  // Confiança é só um aviso visual — nunca bloqueia salvar o ticket (mesma
+  // regra do widget web).
+  const low = [];
+  if (data.contact_name && data.contact_name_confidence < AI_CONFIDENCE_THRESHOLD) low.push(`nome (${Math.round(data.contact_name_confidence)}%)`);
+  if (data.phone && data.phone_confidence < AI_CONFIDENCE_THRESHOLD) low.push(`telefone (${Math.round(data.phone_confidence)}%)`);
+  if (data.company && data.company.confidence < AI_CONFIDENCE_THRESHOLD) low.push(`empresa (${Math.round(data.company.confidence)}%)`);
+  if (data.attendant && data.attendant.confidence < AI_CONFIDENCE_THRESHOLD) low.push(`atendente (${Math.round(data.attendant.confidence)}%)`);
+  if (data.priority && data.priority_confidence < AI_CONFIDENCE_THRESHOLD) low.push(`prioridade (${Math.round(data.priority_confidence)}%)`);
+
+  if (low.length) {
+    msg.textContent = `Preenchido pela IA — confira com atenção: ${low.join(', ')}.`;
+    msg.className = 'validate-msg warn';
+  } else {
+    msg.textContent = 'Campos preenchidos pela IA — revise antes de salvar.';
+    msg.className = 'validate-msg ok';
+  }
+});
+
+// ---- Criar contato do cliente (sistema web) a partir dos campos já
+// preenchidos acima (nome/telefone/e-mail/empresa) — sem precisar abrir o
+// sistema web e cadastrar na mão. Atendimento por "chat" normalmente não tem
+// telefone (é visitante do site, não WhatsApp), então o e-mail vira
+// obrigatório nesse canal — é o único jeito confiável de identificar esse
+// contato depois.
+function updateEmailRequiredHint() {
+  const isChat = $('canal').value === 'chat';
+  $('emailRequiredHint').style.display = isChat ? 'inline' : 'none';
+}
+$('canal').addEventListener('change', updateEmailRequiredHint);
+updateEmailRequiredHint();
+
+// Contato via WhatsApp normalmente não tem e-mail (é só o número) — o
+// sistema web exige algum e-mail (é o identificador principal do contato),
+// então usa esse e-mail placeholder pra esses casos. Ele NUNCA aparece no
+// campo de e-mail do drawer (só entra no dado mandado pro sistema); e se o
+// contato já existir com esse placeholder e depois surgir um e-mail de
+// verdade (digitado no drawer numa próxima conversa), o placeholder é
+// substituído pelo e-mail real — ver lógica de patch abaixo.
+const WHATSAPP_PLACEHOLDER_EMAIL = 'whatsapp@zorte.com';
+
+$('createContactBtn').addEventListener('click', async () => {
+  const msg = $('createContactMsg');
+  const btn = $('createContactBtn');
+  msg.textContent = '';
+  msg.className = 'validate-msg';
+
+  const name = $('name').value.trim();
+  const phone = $('phone').value.trim();
+  const email = $('email').value.trim(); // e-mail de verdade digitado/preenchido, se houver
+  const canal = $('canal').value;
+  const conversationUrl = $('url').value.trim();
+
+  if (canal === 'chat' && !email) {
+    msg.textContent = 'Atendimento por chat — informe o e-mail do cliente antes de criar o contato.';
+    msg.className = 'validate-msg warn';
+    return;
+  }
+  if (!name && !phone && !email) {
+    msg.textContent = 'Preencha nome, telefone ou e-mail do cliente antes de criar o contato.';
+    msg.className = 'validate-msg warn';
+    return;
+  }
+
+  // E-mail que efetivamente vai pro cadastro: o real, se tiver; senão o
+  // placeholder do WhatsApp quando for esse o canal. A busca de duplicado
+  // (abaixo) usa sempre o e-mail REAL — nunca o placeholder, que é
+  // compartilhado entre vários contatos e não serve pra identificar ninguém.
+  const emailForRecord = email || (canal === 'whatsapp' ? WHATSAPP_PLACEHOLDER_EMAIL : '');
+
+  btn.disabled = true;
+
+  // Antes de criar, verifica se já existe um contato com esse e-mail ou
+  // telefone — evita duplicar quem já está cadastrado. Se achar e faltar
+  // algum dado (telefone, e-mail ou empresa), completa em vez de criar de
+  // novo. Passar companyId habilita o fallback do backend: mesma empresa +
+  // único contato com e-mail real e sem telefone ainda conta como "já existe".
+  const found = await send('findContact', { email: email || undefined, phone: phone || undefined, company_id: companyId || undefined });
+  const existing = found && found.ok && found.data && found.data.data;
+
+  if (existing) {
+    const patch = {};
+    if (!existing.phone && phone) patch.phone = phone;
+    if (!existing.email && emailForRecord) {
+      patch.email = emailForRecord;
+    } else if (existing.email === WHATSAPP_PLACEHOLDER_EMAIL && email && email.toLowerCase() !== WHATSAPP_PLACEHOLDER_EMAIL) {
+      // Já tinha só o placeholder do WhatsApp e agora veio um e-mail de
+      // verdade — substitui.
+      patch.email = email;
+    }
+    if (!existing.company_id && companyId) patch.company_id = companyId;
+    // Link da conversa: sempre atualiza pro mais recente (ao contrário dos
+    // campos acima, que só preenchem se estiverem faltando) — é o atendimento
+    // atual que deve ficar salvo pra reabrir depois.
+    if (conversationUrl && existing.conversation_url !== conversationUrl) patch.conversation_url = conversationUrl;
+
+    if (Object.keys(patch).length === 0) {
+      btn.disabled = false;
+      msg.textContent = `Já existe um contato cadastrado com esses dados (${existing.name || 'sem nome'}).`;
+      msg.className = 'validate-msg warn';
+      return;
+    }
+
+    const r = await send('updateContact', { id: existing.id, patch });
+    btn.disabled = false;
+    if (r && r.ok) {
+      msg.textContent = 'Contato atualizado com sucesso.';
+      msg.className = 'validate-msg ok';
+    } else {
+      msg.textContent = (r && r.error) || 'Já existe um contato, mas não consegui completar os dados.';
+      msg.className = 'validate-msg warn';
+    }
+    return;
+  }
+
+  const r = await send('createContact', {
+    contact: { name: name || null, phone: phone || null, email: emailForRecord || null, company_id: companyId || null, conversation_url: conversationUrl || null },
+  });
+  btn.disabled = false;
+
+  if (r && r.ok) {
+    msg.textContent = 'Contato criado no sistema.';
+    msg.className = 'validate-msg ok';
+  } else {
+    msg.textContent = (r && r.error) || 'Não foi possível criar o contato.';
+    msg.className = 'validate-msg warn';
+  }
+});
+
+>>>>>>> a65ab4e (Ajuste geral)
 // ---- Prioridade (SLA) + prazo sugerido ----
 // Espelha frontend/src/lib/sla.ts (a extensão não pode importar módulos TS).
 const SLA_HOURS = { urgente: 4, alta: 24, media: 48, baixa: 72 };
@@ -464,17 +1561,35 @@ $('tagInput').addEventListener('keydown', (e) => {
 });
 
 // ---- Atendentes ----
+<<<<<<< HEAD
 send('getAttendants', {}).then((r) => {
   if (!r || !r.ok) return;
   const list = (r.data && r.data.data) || [];
   const sel = $('attendant');
   for (const a of list) {
     if (a.active === false) continue;
+=======
+// O campo já vem preenchido com quem está logado (sabemos o id exato — não
+// precisa mais casar nome por aproximação), mas continua editável: trocar
+// aqui vale só para o ticket atual.
+Promise.all([
+  send('getAttendants', {}),
+  chrome.storage.local.get({ zt_attendant: null }),
+]).then(([r, { zt_attendant }]) => {
+  if (!r || !r.ok) return;
+  const list = ((r.data && r.data.data) || []).filter((a) => a.active !== false);
+  const sel = $('attendant');
+  for (const a of list) {
+>>>>>>> a65ab4e (Ajuste geral)
     const opt = document.createElement('option');
     opt.value = a.id;
     opt.textContent = a.name;
     sel.appendChild(opt);
   }
+<<<<<<< HEAD
+=======
+  if (zt_attendant && list.some((a) => a.id === zt_attendant.id)) sel.value = zt_attendant.id;
+>>>>>>> a65ab4e (Ajuste geral)
 });
 
 // ---- Fechar (fecha o painel lateral) ----
@@ -508,6 +1623,10 @@ $('form').addEventListener('submit', async (e) => {
     channel: $('canal').value,
     company_id: companyId || null,
     attendant_id: $('attendant').value || null,
+<<<<<<< HEAD
+=======
+    created_by: myAttendantId || null,
+>>>>>>> a65ab4e (Ajuste geral)
     priority: $('priority').value,
     due_date: fromInputValue($('dueDate').value),
     tags: selectedTags,

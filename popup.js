@@ -5,6 +5,7 @@
 // (O "Validar Atendimento" foi removido daqui — agora fica dentro do painel
 //  lateral / drawer.)
 
+<<<<<<< HEAD
 const DEFAULTS = {
   waitingColor: "#FFC107",
   answeredColor: "#2ecc71",
@@ -19,33 +20,96 @@ const OPERATOR_MATCH_TOKENS = {
   "Arthur F": "Arthur",
   "Felipe": "Felipe",
   "Daniely Pavan": "Daniely"
+=======
+// myDisplayName/myMatchToken (usados pelo crisp-ui.js pra etiqueta "🚨 Nome")
+// não são mais escolhidos aqui — background.js grava eles automaticamente
+// a partir de quem loga (ver ação "login").
+const DEFAULTS = {
+  waitingColor: "#FFC107",
+  answeredColor: "#2ecc71",
+>>>>>>> a65ab4e (Ajuste geral)
 };
 
 const els = {
   status: document.getElementById("status"),
-  whoAmI: document.getElementById("whoAmI"),
   waitingColor: document.getElementById("waitingColor"),
   answeredColor: document.getElementById("answeredColor"),
   save: document.getElementById("save"),
   saveStatus: document.getElementById("saveStatus"),
   btnTestConn: document.getElementById("btn-test-conn"),
   testContainer: document.getElementById("test-container"),
+<<<<<<< HEAD
   testMessage: document.getElementById("test-message")
+=======
+  testMessage: document.getElementById("test-message"),
+  loginSection: document.getElementById("loginSection"),
+  loginEmail: document.getElementById("loginEmail"),
+  loginPassword: document.getElementById("loginPassword"),
+  loginError: document.getElementById("loginError"),
+  loginSubmit: document.getElementById("loginSubmit"),
+  loggedBar: document.getElementById("loggedBar"),
+  loggedName: document.getElementById("loggedName"),
+  logoutLink: document.getElementById("logoutLink"),
+  popupContent: document.getElementById("popupContent"),
+>>>>>>> a65ab4e (Ajuste geral)
 };
+
+// ---- Login (obrigatório) ----
+// Mesmo token que o painel lateral usa (chrome.storage.local, centralizado
+// em background.js) — loga uma vez em qualquer um dos dois, vale pro outro.
+function send(action, extra) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action, ...(extra || {}) }, (r) => resolve(r || { ok: false }));
+  });
+}
+
+async function refreshAuthUi() {
+  const r = await send("getAuthStatus");
+  const authed = Boolean(r && r.ok && r.authed);
+  els.loginSection.classList.toggle("hidden", authed);
+  els.loggedBar.classList.toggle("hidden", !authed);
+  els.popupContent.classList.toggle("hidden", !authed);
+  if (authed && r.attendant) els.loggedName.textContent = r.attendant.name || r.attendant.email || "";
+  return authed;
+}
+
+els.loginSubmit.addEventListener("click", async () => {
+  const email = els.loginEmail.value.trim();
+  const password = els.loginPassword.value;
+  if (!email || !password) return;
+  els.loginSubmit.disabled = true;
+  els.loginSubmit.textContent = "Entrando...";
+  const r = await send("login", { email, password });
+  els.loginSubmit.disabled = false;
+  els.loginSubmit.textContent = "Entrar";
+  if (!r || !r.ok) {
+    els.loginError.textContent = (r && r.error) || "Falha no login.";
+    return;
+  }
+  els.loginError.textContent = "";
+  await refreshAuthUi();
+  loadSettings();
+  checkStatus();
+});
+
+els.logoutLink.addEventListener("click", async () => {
+  await send("logout");
+  await refreshAuthUi();
+});
 
 async function loadSettings() {
   const data = await chrome.storage.sync.get(DEFAULTS);
-  els.whoAmI.value = data.myDisplayName || "";
   els.waitingColor.value = data.waitingColor;
   els.answeredColor.value = data.answeredColor;
 }
 
 async function saveSettings() {
+<<<<<<< HEAD
   const myDisplayName = els.whoAmI.value;
   const myMatchToken = myDisplayName ? (OPERATOR_MATCH_TOKENS[myDisplayName] || myDisplayName.split(" ")[0]) : "";
+=======
+>>>>>>> a65ab4e (Ajuste geral)
   const payload = {
-    myDisplayName,
-    myMatchToken,
     waitingColor: els.waitingColor.value || DEFAULTS.waitingColor,
     answeredColor: els.answeredColor.value || DEFAULTS.answeredColor
   };
@@ -120,6 +184,7 @@ async function showVersionInfo() {
   }
 }
 
+refreshAuthUi();
 loadSettings();
 checkStatus();
 showVersionInfo();

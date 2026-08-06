@@ -301,6 +301,14 @@ function showTicketDetail(t) {
   fields.appendChild(detailRow('Prazo', t.due_date ? new Date(t.due_date).toLocaleString('pt-BR') : null));
   content.appendChild(fields);
 
+  // Confirmação de leitura (estilo WhatsApp, mesmo mecanismo do sistema web)
+  // — abrir o detalhe aqui já marca como visto por quem está logado.
+  const readsRow = document.createElement('p');
+  readsRow.className = 'muted';
+  readsRow.style.cssText = 'font-size:11px; margin:6px 0 0;';
+  content.appendChild(readsRow);
+  markAndLoadTicketReads(t.id, readsRow);
+
   if (t.description) {
     const descLabel = document.createElement('div');
     descLabel.className = 'detail-row__label';
@@ -383,6 +391,21 @@ function showTicketDetail(t) {
 
   $('ticketsListView').style.display = 'none';
   $('ticketDetailView').style.display = 'flex';
+}
+
+// Marca o ticket como visto por quem está logado e depois busca+desenha
+// quem já viu — mesma ordem do TicketDetail.tsx (marca antes de listar, pra
+// a própria visita atual já aparecer na lista).
+async function markAndLoadTicketReads(ticketId, container) {
+  await send('markTicketRead', { ticketId });
+  const r = await send('getTicketReads', { ticketId });
+  container.textContent = '';
+  if (!r || !r.ok) return;
+  const reads = (r.data && r.data.data) || [];
+  if (!reads.length) return;
+  const names = reads.map((rd) => rd.name).join(', ');
+  container.textContent = `👁 Visto por ${names}`;
+  container.title = reads.map((rd) => `${rd.name}: ${new Date(rd.read_at).toLocaleString('pt-BR')}`).join('\n');
 }
 
 // Busca as notas do ticket e desenha na lista (chamado ao abrir o detalhe e

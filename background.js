@@ -213,6 +213,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // Confirmação de leitura por atendente (estilo WhatsApp, mesmo mecanismo
+  // do TicketDetail.tsx) — abrir o detalhe do ticket no drawer marca como
+  // visto (markTicketRead) e busca quem já viu (getTicketReads).
+  if (request.action === "markTicketRead") {
+    apiPost(`/tickets/${request.ticketId}/read`, {}).then(sendResponse);
+    return true;
+  }
+
+  if (request.action === "getTicketReads") {
+    apiGet(`/tickets/${request.ticketId}/reads`).then(sendResponse);
+    return true;
+  }
+
   // Catálogo de módulos/preços pra aba "Módulos" do drawer — busca e
   // agrupamento por categoria acontecem no drawer.js, aqui só devolve tudo.
   if (request.action === "getModules") {

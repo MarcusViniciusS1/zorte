@@ -378,6 +378,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // Botão "Atualizar agora" do aviso de extensão desatualizada no sistema web
+  // (ver ExtensionUpdateBanner.tsx + web-bridge.js) — reinicia a extensão
+  // usando o que já está em disco. onInstalled (mais abaixo) reinjeta os
+  // scripts nas abas abertas sozinho depois disso, sem precisar de F5 manual.
+  if (request.action === "reloadExtension") {
+    chrome.runtime.reload();
+    return false;
+  }
+
   return false;
 });
 

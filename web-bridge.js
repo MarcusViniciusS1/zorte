@@ -8,6 +8,11 @@
 // popup também usarem. Login (ou logout) no sistema web passa a valer pra
 // extensão também, sem digitar senha de novo.
 //
+// Também é a ponte de "versão da extensão instalada" pro aviso de atualização
+// do sistema web (ver ExtensionUpdateBanner.tsx): avisa via postMessage qual
+// versão está rodando aqui, e escuta o pedido de "recarregar a extensão"
+// vindo do botão daquele aviso.
+//
 // Só LÊ localStorage — nunca escreve nada na página.
 
 // Se a extensão for recarregada com esta aba já aberta, uma nova instância
@@ -23,9 +28,39 @@ const POLL_MS = 1500;
 
 let lastSentToken;
 let __ztWebBridgeInterval;
+let __ztVersionInterval;
+let __ztReloadRequestHandler;
 window.__ztWebBridgeShutdown = function () {
   try { clearInterval(__ztWebBridgeInterval); } catch { /* já limpo */ }
+  try { clearInterval(__ztVersionInterval); } catch { /* já limpo */ }
+  try { if (__ztReloadRequestHandler) window.removeEventListener('message', __ztReloadRequestHandler); } catch { /* já limpo */ }
 };
+
+// Avisa a página qual versão da extensão está rodando agora — o React
+// escuta isso (ExtensionUpdateBanner.tsx) e compara com a versão mais
+// recente que o backend conhece (GET /api/extension/version). Repete no
+// mesmo intervalo do login pra um listener que montou um pouco depois
+// (ex.: F5 na página) não perder o aviso.
+function broadcastVersion() {
+  try {
+    window.postMessage({ source: 'zt-extension', type: 'version', version: chrome.runtime.getManifest().version }, window.location.origin);
+  } catch {
+    // extensão recarregada — instância nova assume no próximo load
+  }
+}
+
+// Botão "Atualizar agora" do aviso manda essa mensagem; repassa pro
+// background.js recarregar a extensão (chrome.runtime.reload()), que já
+// reinjeta os scripts sozinha nas abas abertas (ver reinjectIntoOpenTabs).
+__ztReloadRequestHandler = function (e) {
+  if (e.source !== window || e.origin !== window.location.origin) return;
+  const d = e.data;
+  if (!d || d.source !== 'zticket-web' || d.type !== 'reloadExtension') return;
+  chrome.runtime.sendMessage({ action: 'reloadExtension' }).catch(() => {
+    // o próprio reload já derruba esse canal de mensagem no meio do caminho — esperado.
+  });
+};
+window.addEventListener('message', __ztReloadRequestHandler);
 
 function readWebSession() {
   try {
@@ -51,3 +86,6 @@ async function syncOnce() {
 
 syncOnce();
 __ztWebBridgeInterval = setInterval(syncOnce, POLL_MS);
+
+broadcastVersion();
+__ztVersionInterval = setInterval(broadcastVersion, POLL_MS);

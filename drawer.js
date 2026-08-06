@@ -235,6 +235,30 @@ function renderTicketRow(t) {
   return row;
 }
 
+// Transforma URLs dentro de um texto solto em links clicáveis — usado onde
+// texto livre (descrição do ticket, nota) pode conter um link colado pelo
+// atendente. Espelha components/Linkified.tsx do sistema web (não dá pra
+// importar entre os dois codebases).
+const URL_REGEX = /(https?:\/\/[^\s<>"']+)/g;
+function renderLinkifiedText(el, text) {
+  el.innerHTML = '';
+  const parts = String(text || '').split(URL_REGEX);
+  parts.forEach((part, i) => {
+    if (i % 2 === 1) {
+      const a = document.createElement('a');
+      a.href = part;
+      a.target = '_blank';
+      a.rel = 'noreferrer';
+      a.textContent = part;
+      a.style.color = '#f87171';
+      a.addEventListener('click', (e) => e.stopPropagation());
+      el.appendChild(a);
+    } else if (part) {
+      el.appendChild(document.createTextNode(part));
+    }
+  });
+}
+
 function detailRow(label, value) {
   const row = document.createElement('div');
   row.className = 'detail-row';
@@ -284,7 +308,7 @@ function showTicketDetail(t) {
     descLabel.textContent = 'Descrição';
     const desc = document.createElement('p');
     desc.className = 'detail-description';
-    desc.textContent = t.description;
+    renderLinkifiedText(desc, t.description);
     content.appendChild(descLabel);
     content.appendChild(desc);
   }
@@ -407,7 +431,7 @@ async function loadTicketNotes(ticketId, container) {
 
     const text = document.createElement('p');
     text.style.cssText = 'margin:0; font-size:13px; white-space:pre-wrap; word-break:break-word;';
-    text.textContent = n.note;
+    renderLinkifiedText(text, n.note);
 
     item.appendChild(head);
     item.appendChild(text);

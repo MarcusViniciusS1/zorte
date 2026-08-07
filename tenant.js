@@ -205,6 +205,12 @@ function extractSessionId() {
 // isso carrega o último nome visto pra frente dentro do mesmo grupo de dia.
 const RE_TODAY_LABEL = /^(hoje|today|hoy|aujourd'hui|heute)$/i;
 
+// Marcador de sistema que o Crisp injeta no meio das mensagens quando a
+// conversa é marcada como resolvida (confirmado no HTML real). Usa o
+// atributo data-event (estável, não depende do texto "Conversa resolvida" —
+// isso muda de idioma) em vez do texto exibido.
+const RESOLVED_EVENT_SELECTOR = '[data-event="state:resolved"]';
+
 function extractGroupSenderName(msgEl) {
   const tip = msgEl.querySelector('.c-conversation-box-content-message__avatar-tooltip .c-base-tooltip__default');
   return tip ? tip.textContent.trim() : '';
@@ -226,10 +232,21 @@ function extractTodayMessagesFromDom() {
       .trim();
     if (!RE_TODAY_LABEL.test(dateLabel)) continue; // só nos interessa o grupo de hoje
 
+    // Cliente pode ter entrado em contato mais de uma vez no mesmo dia, com
+    // um atendimento anterior já marcado como resolvido no meio do grupo de
+    // "hoje". Se houver marcador(es) de resolução, só resume a partir do
+    // ÚLTIMO deles pra frente — nunca mistura com o atendimento anterior.
+    const resolvedMarkers = group.querySelectorAll(RESOLVED_EVENT_SELECTOR);
+    const lastResolvedMarker = resolvedMarkers.length ? resolvedMarkers[resolvedMarkers.length - 1] : null;
+
     let lastOperatorName = '';
     let lastVisitorName = '';
     const msgEls = Array.from(group.querySelectorAll('.c-conversation-box-content-message'));
     for (const el of msgEls) {
+      if (lastResolvedMarker && !(lastResolvedMarker.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+        continue; // mensagem é do atendimento anterior (antes do último "resolvido") — ignora
+      }
+
       const isOperator = el.classList.contains('c-conversation-box-content-message--operator');
       const isVisitor = el.classList.contains('c-conversation-box-content-message--user');
       if (!isOperator && !isVisitor) continue; // evento de sistema etc.

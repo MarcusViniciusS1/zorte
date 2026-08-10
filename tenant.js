@@ -762,6 +762,23 @@ async function maybeAutoFillEmailForActiveConversation() {
   fillEmailIfMissing(profile, data);
 }
 
+// Registra 1 "visita" de suporte por conversa (session_id), vinculada à
+// empresa já identificada em __ztLastCompanyMatch — feature isolada, só pra
+// medir recorrência de contato por cliente (ver TenantView/Reports no
+// sistema web). Só registra quando dá pra identificar a empresa; sem isso o
+// dado não serve pro relatório por cliente. Não duplica se a conversa for
+// reaberta depois (dedup por session_id no backend).
+let __ztVisitLoggedSession = null;
+function maybeRecordSupportVisitForActiveConversation() {
+  const sessionId = extractSessionId();
+  if (!sessionId || sessionId === __ztVisitLoggedSession) return;
+  if (__ztLastCompanyMatch.sessionId !== sessionId) return; // busca de empresa ainda não terminou pra essa conversa
+  const companyId = __ztLastCompanyMatch.data && __ztLastCompanyMatch.data.id;
+  if (!companyId) return;
+  __ztVisitLoggedSession = sessionId;
+  chrome.runtime.sendMessage({ action: 'recordSupportVisit', sessionId, companyId }).catch(() => {});
+}
+
 // Avisa o drawer sempre que o atendente troca de conversa no Crisp — sem
 // isso, o formulário de "Criar ticket" ficava com os dados do cliente
 // ANTERIOR (nome/telefone/e-mail/empresa antigos), podendo gerar um ticket
@@ -788,5 +805,6 @@ __ztInterval = setInterval(async () => {
   // __ztLastCompanyMatch, preenchido só ao final de maybeAutoFillEmail...).
   await maybeAutoFillEmailForActiveConversation();
   maybeAutoUpsertContactForActiveConversation();
+  maybeRecordSupportVisitForActiveConversation();
   notifyIfConversationChanged();
 }, 1500);

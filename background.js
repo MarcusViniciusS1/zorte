@@ -295,6 +295,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // Registra 1 "visita" ao suporte pra essa conversa do Crisp (ver
+  // Navegador/tenant.js, maybeRecordSupportVisitForActiveConversation) — só
+  // pra medir recorrência de contato por empresa, sem depender de ticket.
+  if (request.action === "recordSupportVisit") {
+    apiPost('/support-visits', { session_id: request.sessionId, company_id: request.companyId }).then(sendResponse);
+    return true;
+  }
+
   if (request.action === "getTags") {
     apiGet('/tags?order_by=name&order_dir=asc').then(sendResponse);
     return true;

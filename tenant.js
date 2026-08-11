@@ -547,13 +547,16 @@ function buildPanelField(labelText, value) {
   valueEl.style.cssText = 'flex:1;font-size:13px;color:#18181b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
   fieldWrap.appendChild(valueEl);
   if (value) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.innerHTML = PANEL_COPY_ICON_SVG;
-    btn.title = 'Copiar "' + value + '"';
-    btn.style.cssText = 'border:0;background:transparent;cursor:pointer;color:#8a8a8a;display:flex;flex-shrink:0;padding:2px;';
-    btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); copyPanelValue(value, btn); });
-    fieldWrap.appendChild(btn);
+    // O campo INTEIRO é clicável pra copiar (não só o ícone) — o ícone fica
+    // só como indicação visual, sem listener próprio, pra não copiar duas
+    // vezes (um clique no ícone também é um clique dentro do fieldWrap).
+    const iconEl = document.createElement('span');
+    iconEl.innerHTML = PANEL_COPY_ICON_SVG;
+    iconEl.style.cssText = 'display:flex;flex-shrink:0;color:#8a8a8a;';
+    fieldWrap.appendChild(iconEl);
+    fieldWrap.style.cursor = 'pointer';
+    fieldWrap.title = 'Copiar "' + value + '"';
+    fieldWrap.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); copyPanelValue(value, iconEl); });
   }
   row.appendChild(label);
   row.appendChild(fieldWrap);

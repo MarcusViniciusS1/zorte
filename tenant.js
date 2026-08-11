@@ -23,6 +23,7 @@ if (window.__ztTenantShutdown) {
 (function () {
   const b = document.getElementById('zt-launcher'); if (b) b.remove();
   const w = document.getElementById('zt-drawer-wrap'); if (w) w.remove();
+  const p = document.getElementById('zt-company-panel'); if (p) p.remove();
 })();
 let __ztInterval = null;
 let __ztWidgetClickHandler = null;
@@ -33,6 +34,8 @@ window.__ztTenantShutdown = function () {
   if (oldBtn) oldBtn.remove();
   const oldDrawer = document.getElementById('zt-drawer-wrap');
   if (oldDrawer) oldDrawer.remove();
+  const oldPanel = document.getElementById('zt-company-panel');
+  if (oldPanel) oldPanel.remove();
   // cnpjScannerInstance é declarado mais abaixo neste mesmo script; esta
   // função só é CHAMADA por uma futura reinjeção (depois que o script todo já
   // rodou), então a referência já está inicializada nesse momento.
@@ -483,6 +486,178 @@ function mountLauncher() {
   profileInfo.appendChild(btn);
 }
 
+// ---- Painel de dados da empresa (embaixo do widget "WhatsApp" no painel
+// lateral direito do Crisp) ----
+// Mostra CNPJ/tenant/módulos da empresa já identificada nesta conversa —
+// reaproveita o MESMO resultado de busca que maybeAutoFillEmailForActive-
+// Conversation já guarda em __ztLastCompanyMatch, nenhuma consulta extra ao
+// backend pra isso. O botão "Registrar" chama a MESMA função openDrawer do
+// botão do topo (mountLauncher) — os dois convivem, nenhum substitui o outro.
+const PROFILE_BODY_SELECTOR = '.c-conversation-profile__body';
+const PANEL_COPY_ICON_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+const PANEL_CHECK_ICON_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+// Catálogo de módulos cacheado uma vez (não muda durante a sessão do
+// atendente) — evita bater no backend de novo a cada troca de conversa.
+let __ztModulesCatalog = null;
+async function fetchModulesCatalog() {
+  if (__ztModulesCatalog) return __ztModulesCatalog;
+  try {
+    const r = await chrome.runtime.sendMessage({ action: 'getModules' });
+    __ztModulesCatalog = (r && r.ok && r.data && r.data.data) || [];
+  } catch (e) {
+    __ztModulesCatalog = [];
+  }
+  return __ztModulesCatalog;
+}
+
+function copyPanelValue(value, btn) {
+  const done = () => {
+    btn.innerHTML = PANEL_CHECK_ICON_SVG;
+    setTimeout(() => { btn.innerHTML = PANEL_COPY_ICON_SVG; }, 1200);
+  };
+  navigator.clipboard.writeText(value).then(done).catch(() => {
+    // Fallback pra páginas sem foco/permissão de clipboard (mesmo padrão do
+    // botão de copiar segmento em crisp-ui.js).
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) { /* ignora */ }
+    ta.remove();
+    done();
+  });
+}
+
+// Uma "linha" do painel: rótulo + valor + botão de copiar (só aparece se
+// houver valor). Sem botão quando o valor é vazio — não faz sentido copiar
+// um campo em branco.
+function buildPanelField(labelText, value) {
+  const row = document.createElement('div');
+  row.style.cssText = 'margin-bottom:10px;';
+  const label = document.createElement('div');
+  label.textContent = labelText;
+  label.style.cssText = 'font-size:10.5px;font-weight:700;letter-spacing:.04em;color:#8a8a8a;margin-bottom:4px;text-transform:uppercase;';
+  const fieldWrap = document.createElement('div');
+  fieldWrap.style.cssText = 'display:flex;align-items:center;gap:6px;background:#f5f5f5;border:1px solid #e2e2e2;border-radius:8px;padding:7px 9px;';
+  const valueEl = document.createElement('span');
+  valueEl.textContent = value || '—';
+  valueEl.style.cssText = 'flex:1;font-size:13px;color:#18181b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
+  fieldWrap.appendChild(valueEl);
+  if (value) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.innerHTML = PANEL_COPY_ICON_SVG;
+    btn.title = 'Copiar "' + value + '"';
+    btn.style.cssText = 'border:0;background:transparent;cursor:pointer;color:#8a8a8a;display:flex;flex-shrink:0;padding:2px;';
+    btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); copyPanelValue(value, btn); });
+    fieldWrap.appendChild(btn);
+  }
+  row.appendChild(label);
+  row.appendChild(fieldWrap);
+  return row;
+}
+
+// Acha o widget "WhatsApp" (plugin nativo do Crisp) pelo título do cabeçalho
+// — independe de posição/ordem, já que os widgets do painel podem ser
+// arrastados/reordenados pelo atendente. Sem esse widget (conversa por outro
+// canal), volta null e o painel entra no final do painel lateral.
+function findCompanyPanelAnchor(body) {
+  const titles = body.querySelectorAll('.c-conversation-profile-widget-header__info-title');
+  for (const t of titles) {
+    if (t.textContent.trim() === 'WhatsApp') {
+      const root = t.closest('.c-conversation-profile-widget-root');
+      if (root) return root;
+    }
+  }
+  return null;
+}
+
+// Desenha (ou redesenha, se a conversa mudou) o painel — sempre aparece
+// assim que a busca da empresa termina pra essa conversa, com placeholder
+// "Empresa não identificada" quando não achar nada (deixa claro que é "não
+// achou" e não "quebrou"). O botão "Registrar" funciona nos dois casos.
+async function mountCompanyPanel() {
+  const body = document.querySelector(PROFILE_BODY_SELECTOR);
+  if (!body) return;
+  const sessionId = extractSessionId();
+  if (!sessionId) return;
+  if (__ztLastCompanyMatch.sessionId !== sessionId) return; // busca da empresa ainda não terminou pra essa conversa
+
+  const existing = document.getElementById('zt-company-panel');
+  if (existing) {
+    if (existing.dataset.sessionId === sessionId) return; // já desenhado pra essa conversa
+    existing.remove(); // trocou de conversa — remove o painel da conversa anterior
+  }
+
+  // match pode ser null (empresa não identificada nesta conversa) — mostra o
+  // painel MESMO ASSIM, com placeholder, pra ficar claro que é "não achou"
+  // e não "o painel quebrou". O botão "Registrar" continua funcionando de
+  // qualquer forma, então sempre faz sentido ter o painel na tela.
+  const match = __ztLastCompanyMatch.data;
+
+  const panel = document.createElement('div');
+  panel.id = 'zt-company-panel';
+  panel.dataset.sessionId = sessionId;
+  panel.style.cssText =
+    'margin:12px;padding:14px;border:1px solid #e2e2e2;border-radius:10px;background:#fff;' +
+    'box-shadow:0 1px 3px rgba(0,0,0,.06);font-family:-apple-system,Segoe UI,Roboto,sans-serif;';
+
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:12px;';
+  const icon = document.createElement('img');
+  icon.src = chrome.runtime.getURL('logo-color.png');
+  icon.alt = 'Zorte';
+  icon.style.cssText = 'width:26px;height:26px;border-radius:7px;flex-shrink:0;object-fit:cover;';
+  const title = document.createElement('div');
+  title.textContent = match ? (match.name || 'Empresa') : 'Empresa não identificada';
+  title.style.cssText =
+    'font-size:13px;font-weight:700;color:' + (match ? '#18181b' : '#a1a1aa') + ';flex:1;overflow:hidden;text-overflow:ellipsis;' +
+    'white-space:nowrap;min-width:0;text-transform:uppercase;';
+  header.appendChild(icon);
+  header.appendChild(title);
+  panel.appendChild(header);
+
+  panel.appendChild(buildPanelField('CNPJ', match ? (match.document || '') : ''));
+  panel.appendChild(buildPanelField('Tenant', match ? (match.tenant || '') : ''));
+
+  const modulesLabel = document.createElement('div');
+  modulesLabel.textContent = 'MÓDULOS';
+  modulesLabel.style.cssText = 'font-size:10.5px;font-weight:700;letter-spacing:.04em;color:#8a8a8a;margin-bottom:4px;';
+  panel.appendChild(modulesLabel);
+  const modulesBox = document.createElement('div');
+  modulesBox.style.cssText =
+    'min-height:20px;background:#f5f5f5;border:1px solid #e2e2e2;border-radius:8px;padding:8px 9px;' +
+    'font-size:12.5px;color:#18181b;margin-bottom:12px;line-height:1.4;';
+  modulesBox.textContent = 'Verificando...';
+  panel.appendChild(modulesBox);
+
+  const registerBtn = document.createElement('button');
+  registerBtn.type = 'button';
+  registerBtn.textContent = 'REGISTRAR';
+  registerBtn.style.cssText =
+    'width:100%;border:0;cursor:pointer;padding:10px;border-radius:8px;color:#fff;' +
+    'font:700 12px/1 -apple-system,Segoe UI,Roboto,sans-serif;letter-spacing:.04em;' +
+    'background:linear-gradient(135deg,#ef4444,#dc2626);box-shadow:0 2px 10px rgba(239,68,68,.35);';
+  registerBtn.addEventListener('click', openDrawer);
+  panel.appendChild(registerBtn);
+
+  const anchor = findCompanyPanelAnchor(body);
+  if (anchor) anchor.insertAdjacentElement('afterend', panel);
+  else body.appendChild(panel);
+
+  const moduleIds = match ? (match.module_ids || []) : [];
+  if (!moduleIds.length) {
+    modulesBox.textContent = 'Cliente não possui nenhum módulo cadastrado.';
+  } else {
+    const catalog = await fetchModulesCatalog();
+    const names = catalog.filter((m) => moduleIds.includes(m.id)).map((m) => m.name);
+    modulesBox.textContent = names.length ? names.join(', ') : 'Cliente não possui nenhum módulo cadastrado.';
+  }
+}
+
 // ---- Fallback: drawer dentro da própria página (iframe da extensão) ----
 // Usado quando o painel lateral nativo do Chrome é recusado. Fica ancorado à
 // direita e empurra o conteúdo do Crisp (best-effort) para não tampar.
@@ -806,5 +981,6 @@ __ztInterval = setInterval(async () => {
   await maybeAutoFillEmailForActiveConversation();
   maybeAutoUpsertContactForActiveConversation();
   maybeRecordSupportVisitForActiveConversation();
+  mountCompanyPanel();
   notifyIfConversationChanged();
 }, 1500);

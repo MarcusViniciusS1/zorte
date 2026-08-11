@@ -637,6 +637,30 @@ async function mountCompanyPanel() {
   modulesBox.textContent = 'Verificando...';
   panel.appendChild(modulesBox);
 
+  // Cores por categoria — mesma paleta da aba "Módulos" do drawer (ver
+  // CATEGORY_COLORS em drawer.js), pra não ter duas paletas diferentes pro
+  // mesmo dado no sistema.
+  const MODULE_CATEGORY_COLORS = { adicionais: '#60a5fa', fiscal: '#fbbf24', operacional: '#34d399' };
+  function moduleCategoryColor(m) {
+    const cat = (m.category || '').trim().toLowerCase();
+    return (cat && MODULE_CATEGORY_COLORS[cat]) || '#a1a1aa';
+  }
+  // Chip = etiqueta arredondada (bolinha colorida por categoria + nome), MESMO
+  // padrão visual da aba Módulos do drawer — só que aqui é somente exibição
+  // (o painel é de leitura, não tem como marcar/desmarcar módulo por aqui).
+  function buildModuleChip(m) {
+    const color = moduleCategoryColor(m);
+    const chip = document.createElement('span');
+    chip.style.cssText =
+      'display:inline-flex;align-items:center;gap:6px;border-radius:7px;padding:4px 9px;font-size:12px;' +
+      'background:' + color + '18;border:1px solid ' + color + '55;color:' + color + ';';
+    const dot = document.createElement('span');
+    dot.style.cssText = 'width:6px;height:6px;flex-shrink:0;border-radius:999px;background:' + color + ';display:inline-block;';
+    chip.appendChild(dot);
+    chip.appendChild(document.createTextNode(m.name));
+    return chip;
+  }
+
   const registerBtn = document.createElement('button');
   registerBtn.type = 'button';
   registerBtn.textContent = 'REGISTRAR';
@@ -656,8 +680,15 @@ async function mountCompanyPanel() {
     modulesBox.textContent = 'Cliente não possui nenhum módulo cadastrado.';
   } else {
     const catalog = await fetchModulesCatalog();
-    const names = catalog.filter((m) => moduleIds.includes(m.id)).map((m) => m.name);
-    modulesBox.textContent = names.length ? names.join(', ') : 'Cliente não possui nenhum módulo cadastrado.';
+    const mods = catalog.filter((m) => moduleIds.includes(m.id));
+    if (!mods.length) {
+      modulesBox.textContent = 'Cliente não possui nenhum módulo cadastrado.';
+    } else {
+      modulesBox.textContent = '';
+      modulesBox.style.cssText =
+        'display:flex;flex-wrap:wrap;gap:6px;background:transparent;border:0;padding:0;margin-bottom:12px;';
+      for (const m of mods) modulesBox.appendChild(buildModuleChip(m));
+    }
   }
 }
 

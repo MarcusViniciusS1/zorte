@@ -187,7 +187,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // ordenação por prioridade acontecem no drawer.js, aqui só devolve todos
   // com os embeds necessários pra isso.
   if (request.action === "getOpenTickets") {
-    apiGet('/tickets?embed=company,attendant,contact&order_by=created_at&order_dir=desc').then(sendResponse);
+    apiGet('/tickets?embed=companies,attendant,contact&order_by=created_at&order_dir=desc').then(sendResponse);
     return true;
   }
 
@@ -248,6 +248,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === "searchCompany") {
     apiGet(`/lookup/company?q=${encodeURIComponent(request.query || '')}`).then(sendResponse);
+    return true;
+  }
+
+  // Aba "Histórico" do drawer — lista de tickets da empresa + filiais do
+  // mesmo tenant, e total de conversas distintas (recorrência).
+  if (request.action === "getCompanyTicketHistory") {
+    apiGet(`/companies/${encodeURIComponent(request.companyId)}/ticket-history`).then(sendResponse);
     return true;
   }
 

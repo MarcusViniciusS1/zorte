@@ -131,17 +131,21 @@ function setMode(mode) {
   const consult = mode === 'consult';
   const modules = mode === 'modules';
   const contacts = mode === 'contacts';
+  const history = mode === 'history';
   $('modeSwitch').classList.toggle('mode-switch--consult', consult);
   $('modeSwitch').classList.toggle('mode-switch--modules', modules);
   $('modeSwitch').classList.toggle('mode-switch--contacts', contacts);
+  $('modeSwitch').classList.toggle('mode-switch--history', history);
   $('modeCreate').classList.toggle('active', mode === 'create');
   $('modeConsult').classList.toggle('active', consult);
   $('modeModules').classList.toggle('active', modules);
   $('modeContacts').classList.toggle('active', contacts);
+  $('modeHistory').classList.toggle('active', history);
   $('createPanel').style.display = mode === 'create' ? 'contents' : 'none';
   $('consultPanel').style.display = consult ? 'flex' : 'none';
   $('modulesPanel').style.display = modules ? 'flex' : 'none';
   $('contactsPanel').style.display = contacts ? 'flex' : 'none';
+  $('historyPanel').style.display = history ? 'flex' : 'none';
   // Sempre volta pra lista ao entrar em "Consultar" — não deixa preso numa
   // visualização compacta de um ticket de uma visita anterior.
   $('ticketDetailView').style.display = 'none';
@@ -160,14 +164,24 @@ function setMode(mode) {
     $('contactsListView').style.display = 'flex';
     if (!contactsLoaded) loadContacts();
   }
+
+  if (history) autoFillHistoryCompany();
 }
 $('modeCreate').addEventListener('click', () => setMode('create'));
 $('modeConsult').addEventListener('click', () => setMode('consult'));
 $('modeModules').addEventListener('click', () => setMode('modules'));
 $('modeContacts').addEventListener('click', () => setMode('contacts'));
+$('modeHistory').addEventListener('click', () => setMode('history'));
 
 // Badges de prioridade/status/issue do Linear — usado tanto na linha da
 // lista quanto no topo da visualização compacta de 1 ticket.
+// Um ticket pode ter mais de uma empresa vinculada (ver TicketDetail.tsx no
+// sistema web) — o embed do backend é "companies" (array), não "company".
+function ticketCompanyLabel(t) {
+  if (!Array.isArray(t.companies) || !t.companies.length) return '';
+  return t.companies.map((c) => c.name).filter(Boolean).join(', ');
+}
+
 function buildTicketBadges(t) {
   const meta = document.createElement('div');
   meta.className = 'ticket-row__meta';
@@ -219,9 +233,10 @@ function renderTicketRow(t) {
   top.appendChild(number);
 
   const meta = buildTicketBadges(t);
-  if (t.company && t.company.name) {
+  const companyLabel = ticketCompanyLabel(t);
+  if (companyLabel) {
     const company = document.createElement('span');
-    company.textContent = t.company.name;
+    company.textContent = companyLabel;
     meta.appendChild(company);
   }
   if (t.attendant && t.attendant.name) {
@@ -292,7 +307,7 @@ function showTicketDetail(t) {
   const fields = document.createElement('div');
   fields.style.marginTop = '10px';
   fields.appendChild(detailRow('Ticket', t.ticket_number ? `#${t.ticket_number}` : null));
-  fields.appendChild(detailRow('Empresa', t.company && t.company.name));
+  fields.appendChild(detailRow('Empresa', ticketCompanyLabel(t)));
   fields.appendChild(detailRow('Contato', t.nome_contato || (t.contact && t.contact.name)));
   fields.appendChild(detailRow('Telefone', t.telefone_contato));
   fields.appendChild(detailRow('Atendente', t.attendant && t.attendant.name));
@@ -475,7 +490,7 @@ function matchesSearch(t, q) {
     t.ticket_number != null ? String(t.ticket_number) : '',
     t.subject || '',
     t.description || '',
-    t.company && t.company.name,
+    ticketCompanyLabel(t),
     t.nome_contato || '',
     t.contact && t.contact.name,
   ].filter(Boolean).join(' ').toLowerCase();
@@ -883,6 +898,172 @@ async function loadModules() {
   if (pendingModuleIds) renderCompanyModuleChips(pendingModuleIds);
 }
 
+// ---- Histórico (aba "Histórico" — busca a EMPRESA, igual à aba Módulos, e
+// lista TODOS os tickets dela + filiais do mesmo tenant, pendentes e
+// resolvidos, com indicadores de recorrência no topo e filtro por status.
+// Read-only: clicar num ticket aqui não abre detalhe/nota — isso já existe
+// na aba Consultar; o objetivo é dar uma visão rápida do histórico do
+// cliente, não gerenciar ticket. ----
+let historyCompanyId = '';
+let historySearchTimer = null;
+let historyTickets = []; // último resultado carregado do backend (sem filtro de status)
+let historyVisitCount = null;
+let historyStatusFilter = 'all'; // 'all' | 'pending' | 'resolved'
+
+function clearHistoryCompany() {
+  historyCompanyId = '';
+  historyTickets = [];
+  historyVisitCount = null;
+  $('historyCompanyChip').style.display = 'none';
+  $('historyCompany').style.display = '';
+  $('historyCompany').value = '';
+  $('historyCompanyList').style.display = 'none';
+  $('historySummary').style.display = 'none';
+  $('historyTicketsList').innerHTML = '';
+  $('historyCompanyMsg').textContent = '';
+}
+
+async function selectHistoryCompany(c) {
+  if (!c || !c.id) return;
+  historyCompanyId = c.id;
+  const detalhes = [c.tenant, c.document ? `CNPJ ${c.document}` : null].filter(Boolean);
+  $('historyCompanyChipName').textContent = c.name + (detalhes.length ? ` · ${detalhes.join(' · ')}` : '');
+  $('historyCompanyChip').style.display = 'flex';
+  $('historyCompany').style.display = 'none';
+  $('historyCompanyList').style.display = 'none';
+  await loadHistory();
+}
+
+function renderHistoryCompanyList(results) {
+  const box = $('historyCompanyList');
+  box.innerHTML = '';
+  if (!results.length) { box.style.display = 'none'; return; }
+  for (const c of results) {
+    const item = document.createElement('div');
+    item.className = 'combo-item';
+    const nm = document.createElement('div');
+    nm.className = 'nm';
+    nm.textContent = c.name;
+    const mt = document.createElement('div');
+    mt.className = 'mt';
+    mt.textContent = (c.document ? `CNPJ ${c.document}` : 'Sem CNPJ') + (c.tenant ? ` · ${c.tenant}` : '');
+    item.appendChild(nm);
+    item.appendChild(mt);
+    item.addEventListener('mousedown', (e) => { e.preventDefault(); selectHistoryCompany(c); });
+    box.appendChild(item);
+  }
+  box.style.display = 'block';
+}
+
+$('historyCompany').addEventListener('input', () => {
+  const q = $('historyCompany').value.trim();
+  clearTimeout(historySearchTimer);
+  if (!q) { $('historyCompanyList').style.display = 'none'; return; }
+  historySearchTimer = setTimeout(async () => {
+    const r = await send('searchCompany', { query: q });
+    if (r && r.ok) renderHistoryCompanyList((r.data && r.data.results) || []);
+  }, 250);
+});
+$('historyCompany').addEventListener('blur', () => setTimeout(() => { $('historyCompanyList').style.display = 'none'; }, 150));
+$('historyCompanyClear').addEventListener('click', clearHistoryCompany);
+
+// Preenche sozinha com a empresa já identificada na conversa atual do Crisp
+// — mesmo mecanismo da aba Módulos — só na primeira vez que a aba é aberta,
+// sem sobrescrever uma busca manual já feita pelo atendente.
+function autoFillHistoryCompany() {
+  if (historyCompanyId) return;
+  if (lastContext && lastContext.found && lastContext.data) selectHistoryCompany(lastContext.data);
+}
+
+async function loadHistory() {
+  $('historySummary').style.display = 'none';
+  $('historyTicketsList').innerHTML = '';
+  $('historyCompanyMsg').textContent = 'Carregando histórico...';
+  $('historyCompanyMsg').className = 'validate-msg';
+  const r = await send('getCompanyTicketHistory', { companyId: historyCompanyId });
+  if (!r || !r.ok) {
+    $('historyCompanyMsg').textContent = (r && r.error) || 'Não foi possível carregar o histórico.';
+    $('historyCompanyMsg').className = 'validate-msg warn';
+    return;
+  }
+  $('historyCompanyMsg').textContent = '';
+  const payload = (r.data && r.data.data) || {};
+  historyTickets = payload.tickets || [];
+  historyVisitCount = payload.visit_count != null ? payload.visit_count : null;
+  renderHistorySummary();
+  renderHistoryTicketsList();
+  $('historySummary').style.display = 'flex';
+}
+
+function renderHistorySummary() {
+  const total = historyTickets.length;
+  const resolved = historyTickets.filter((t) => CLOSED_STATUSES.has(t.status)).length;
+  const pending = total - resolved;
+  $('historyStatTotal').textContent = String(total);
+  $('historyStatPending').textContent = String(pending);
+  $('historyStatResolved').textContent = String(resolved);
+  $('historyVisitsLine').textContent = historyVisitCount != null
+    ? `💬 ${historyVisitCount} conversa${historyVisitCount === 1 ? '' : 's'} identificada${historyVisitCount === 1 ? '' : 's'} com este cliente`
+    : '';
+}
+
+function setHistoryFilter(filter) {
+  historyStatusFilter = filter;
+  $('historyFilterAll').classList.toggle('active', filter === 'all');
+  $('historyFilterPending').classList.toggle('active', filter === 'pending');
+  $('historyFilterResolved').classList.toggle('active', filter === 'resolved');
+  renderHistoryTicketsList();
+}
+$('historyFilterAll').addEventListener('click', () => setHistoryFilter('all'));
+$('historyFilterPending').addEventListener('click', () => setHistoryFilter('pending'));
+$('historyFilterResolved').addEventListener('click', () => setHistoryFilter('resolved'));
+
+function renderHistoryTicketRow(t) {
+  const row = document.createElement('div');
+  row.className = 'ticket-row ticket-row--static';
+
+  const top = document.createElement('div');
+  top.className = 'ticket-row__top';
+  const subject = document.createElement('span');
+  subject.className = 'ticket-row__subject';
+  subject.textContent = t.subject || '(sem assunto)';
+  const number = document.createElement('span');
+  number.className = 'ticket-row__number';
+  number.textContent = t.ticket_number ? `#${t.ticket_number}` : '';
+  top.appendChild(subject);
+  top.appendChild(number);
+
+  const meta = buildTicketBadges(t);
+  if (t.created_at) {
+    const date = document.createElement('span');
+    date.textContent = new Date(t.created_at).toLocaleDateString('pt-BR');
+    meta.appendChild(date);
+  }
+
+  row.appendChild(top);
+  row.appendChild(meta);
+  return row;
+}
+
+function renderHistoryTicketsList() {
+  const box = $('historyTicketsList');
+  box.innerHTML = '';
+  const filtered = historyTickets.filter((t) => {
+    if (historyStatusFilter === 'pending') return !CLOSED_STATUSES.has(t.status);
+    if (historyStatusFilter === 'resolved') return CLOSED_STATUSES.has(t.status);
+    return true;
+  });
+  if (!filtered.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.style.fontSize = '12.5px';
+    empty.textContent = historyTickets.length ? 'Nenhum ticket nesse filtro.' : 'Nenhum ticket encontrado pra esta empresa.';
+    box.appendChild(empty);
+    return;
+  }
+  for (const t of filtered) box.appendChild(renderHistoryTicketRow(t));
+}
+
 function showError(text) {
   const el = $('error');
   if (!text) { el.style.display = 'none'; el.textContent = ''; el.className = 'error'; return; }
@@ -971,6 +1152,10 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
     if (request && request.action === 'cnpjMatchFound' && request.company && !moduleCompanyId) {
       selectModuleCompany(request.company);
     }
+    // Idem pra aba "Histórico".
+    if (request && request.action === 'cnpjMatchFound' && request.company && !historyCompanyId) {
+      selectHistoryCompany(request.company);
+    }
     // Pedido do background pra se fechar (atalho Ctrl+\ apertado de novo
     // com o painel já aberto — ver toggleSidePanel em background.js).
     if (request && request.action === 'closeDrawer') {
@@ -981,9 +1166,11 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
     // tenant.js) — troca pro rascunho da conversa nova se já existir um (ver
     // loadOrResetForSession), senão limpa os dados do cliente ANTERIOR
     // (nome, telefone, e-mail, empresa, tags, issues...) pra não vazar
-    // informação errada pro ticket da conversa nova.
+    // informação errada pro ticket da conversa nova. Módulos/Histórico
+    // seguem a mesma regra — não fica preso na empresa da conversa anterior.
     if (request && request.action === 'conversationChanged') {
       clearModuleCompany();
+      clearHistoryCompany();
       send('getContext', {}).then((r) => { lastContext = r; loadOrResetForSession(r); });
     }
   });

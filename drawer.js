@@ -937,6 +937,7 @@ function clearCompany() {
   $('company').value = '';
   $('companyList').style.display = 'none';
   hideSearchResult();
+  saveDraftDebounced();
 }
 
 function selectCompany(c) {
@@ -947,6 +948,7 @@ function selectCompany(c) {
   $('companyChip').style.display = 'flex';
   $('company').style.display = 'none';
   $('companyList').style.display = 'none';
+  saveDraftDebounced();
 }
 
 // ---- Aviso do scanner de CNPJ (tenant.js) ----
@@ -976,13 +978,13 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
     }
 
     // Trocou de conversa no Crisp (ver notifyIfConversationChanged em
-    // tenant.js) — limpa os dados do cliente ANTERIOR (nome, telefone,
-    // e-mail, empresa, tags, issues...) e recarrega o contexto da conversa
-    // nova, senão o ticket sairia com informação do cliente errado.
+    // tenant.js) — troca pro rascunho da conversa nova se já existir um (ver
+    // loadOrResetForSession), senão limpa os dados do cliente ANTERIOR
+    // (nome, telefone, e-mail, empresa, tags, issues...) pra não vazar
+    // informação errada pro ticket da conversa nova.
     if (request && request.action === 'conversationChanged') {
-      resetCreateForm();
       clearModuleCompany();
-      send('getContext', {}).then((r) => { lastContext = r; applyContext(r, { fillCompany: true }); });
+      send('getContext', {}).then((r) => { lastContext = r; loadOrResetForSession(r); });
     }
   });
 }
@@ -1086,8 +1088,120 @@ function resetCreateForm() {
 // aberta) pra "Resumir com IA" não precisar reler o DOM do Crisp de novo.
 let lastContext = null;
 
+// ---- Rascunho por conversa ----
+// Trocar de aba (o painel se fecha sozinho, ver closeIfTabIsNotCrisp no topo
+// deste arquivo) ou trocar de conversa no Crisp (ver "conversationChanged"
+// acima) perdia TUDO que o atendente já tinha digitado — o formulário sempre
+// nascia em branco de novo. Agora cada conversa (chave = website+sessão, ver
+// getContext) guarda seu próprio rascunho em chrome.storage.session (memória
+// da sessão do navegador — não precisa sobreviver a um fechar completo do
+// Chrome, só ao ir-e-voltar de aba/conversa) e recupera sozinho ao reabrir a
+// MESMA conversa. Uma conversa nova (sem rascunho salvo) continua limpando
+// o formulário como antes, pra não vazar dado do cliente anterior.
+let currentSessionKey = null;
+let draftAttendantValue = null; // ver Promise.all(getAttendants) mais abaixo
+let saveDraftTimer = null;
+
+function sessionKeyFrom(ctx) {
+  if (!ctx || !ctx.websiteId || !ctx.sessionId) return null;
+  return `zt_draft:${ctx.websiteId}:${ctx.sessionId}`;
+}
+
+async function loadDraft(key) {
+  if (!key) return null;
+  try {
+    const obj = await chrome.storage.session.get(key);
+    return (obj && obj[key]) || null;
+  } catch (e) {
+    return null; // storage.session indisponível (Chrome antigo) — segue sem rascunho
+  }
+}
+
+function snapshotFormState() {
+  return {
+    subject: $('subject').value,
+    name: $('name').value,
+    phone: $('phone').value,
+    email: $('email').value,
+    url: $('url').value,
+    description: $('description').value,
+    status: $('status').value,
+    sistema: $('sistema').value,
+    canal: $('canal').value,
+    attendant: $('attendant').value,
+    priority: $('priority').value,
+    dueDate: $('dueDate').value,
+    dueDateTouched,
+    company: companyId ? { id: companyId, label: $('companyChipName').textContent } : null,
+    tags: [...selectedTags],
+    linearIssues: linkedIssues.map((i) => ({ ...i })),
+  };
+}
+
+function applyCompanySnapshot(company) {
+  if (!company || !company.id) { clearCompany(); return; }
+  companyId = company.id;
+  $('companyChipName').textContent = company.label || '';
+  $('companyChip').style.display = 'flex';
+  $('company').style.display = 'none';
+  $('companyList').style.display = 'none';
+}
+
+function applyFormSnapshot(snap) {
+  $('subject').value = snap.subject || '';
+  $('name').value = snap.name || '';
+  $('phone').value = snap.phone || '';
+  $('email').value = snap.email || '';
+  $('url').value = snap.url || '';
+  $('description').value = snap.description || '';
+  $('status').value = snap.status || 'novo';
+  $('sistema').value = snap.sistema || 'Z';
+  $('canal').value = snap.canal || 'chat';
+  if (typeof updateEmailRequiredHint === 'function') updateEmailRequiredHint();
+  $('priority').value = snap.priority || 'media';
+  $('dueDate').value = snap.dueDate || '';
+  dueDateTouched = Boolean(snap.dueDateTouched);
+  draftAttendantValue = snap.attendant || null;
+  if (draftAttendantValue) $('attendant').value = draftAttendantValue;
+  applyCompanySnapshot(snap.company);
+  selectedTags = Array.isArray(snap.tags) ? [...snap.tags] : [];
+  renderTagChips();
+  linkedIssues = Array.isArray(snap.linearIssues) ? snap.linearIssues.map((i) => ({ ...i })) : [];
+  renderLinearChips();
+}
+
+function saveDraftNow() {
+  if (!currentSessionKey) return;
+  try { chrome.storage.session.set({ [currentSessionKey]: snapshotFormState() }); } catch (e) {}
+}
+function saveDraftDebounced() {
+  clearTimeout(saveDraftTimer);
+  saveDraftTimer = setTimeout(saveDraftNow, 400);
+}
+// Cobre todo campo de texto/select/data do formulário de uma vez (eventos
+// borbulham) — empresa/tags/issues do Linear são estado próprio (arrays,
+// chip), por isso salvam sozinhos nos pontos onde mudam (ver
+// selectCompany/clearCompany/renderTagChips/renderLinearChips acima).
+$('form').addEventListener('input', saveDraftDebounced);
+$('form').addEventListener('change', saveDraftDebounced);
+
+// Decide, pra conversa do contexto atual: existe rascunho? restaura. Não
+// existe (conversa nova de verdade)? limpa e preenche com o perfil do Crisp,
+// como sempre foi.
+async function loadOrResetForSession(ctx) {
+  const key = sessionKeyFrom(ctx);
+  currentSessionKey = key;
+  const draft = await loadDraft(key);
+  if (draft) {
+    applyFormSnapshot(draft);
+  } else {
+    resetCreateForm();
+    applyContext(ctx, { fillCompany: true });
+  }
+}
+
 // Ao abrir o painel, puxa o contexto da conversa atual.
-send('getContext', {}).then((r) => { lastContext = r; applyContext(r, { fillCompany: true }); });
+send('getContext', {}).then((r) => { lastContext = r; loadOrResetForSession(r); });
 
 // ---- Card de resultado da busca (Nome / Tenant / CNPJ / Cliente Novo) ----
 function hideSearchResult() {
@@ -1419,6 +1533,7 @@ function renderLinearChips() {
     chip.appendChild(x);
     box.appendChild(chip);
   }
+  saveDraftDebounced();
 }
 
 function addLinearIssue(issue) {
@@ -1509,6 +1624,7 @@ function renderTagChips() {
     chip.appendChild(x);
     box.appendChild(chip);
   }
+  saveDraftDebounced();
 }
 
 function addTag(name) {
@@ -1590,7 +1706,11 @@ Promise.all([
     opt.textContent = a.name;
     sel.appendChild(opt);
   }
-  if (zt_attendant && list.some((a) => a.id === zt_attendant.id)) sel.value = zt_attendant.id;
+  // Se um rascunho já tinha restaurado um atendente diferente antes desta
+  // lista terminar de carregar (corrida entre os dois carregamentos), o
+  // rascunho tem prioridade — senão cai no padrão de sempre (quem está logado).
+  if (draftAttendantValue && list.some((a) => a.id === draftAttendantValue)) sel.value = draftAttendantValue;
+  else if (zt_attendant && list.some((a) => a.id === zt_attendant.id)) sel.value = zt_attendant.id;
 });
 
 // ---- Fechar (fecha o painel lateral) ----
@@ -1649,6 +1769,10 @@ $('form').addEventListener('submit', async (e) => {
   const created = (r.data && r.data.data) || {};
   // Log de auditoria (não bloqueia o fluxo se falhar).
   send('createLog', { log: { action: 'create', entity: 'ticket', entity_id: created.id, details: { subject, sistema: ticket.sistema } } });
+
+  // Ticket criado — o rascunho desta conversa não serve mais (senão a
+  // próxima vez que abrir essa mesma conversa voltaria o formulário antigo).
+  if (currentSessionKey) { try { chrome.storage.session.remove(currentSessionKey); } catch (e) {} }
 
   showSuccess(`Ticket criado: "${subject}". Fechando...`);
   btn.textContent = 'Criado ✓';

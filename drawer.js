@@ -1604,6 +1604,12 @@ $('form').addEventListener('submit', async (e) => {
   const subject = $('subject').value.trim();
   if (!subject) { showError('Informe o assunto.'); return; }
 
+  // Enter no formulário disparava o mesmo submit do botão "Criar ticket" sem
+  // nenhuma confirmação — fácil de criar ticket por engano. window.confirm()
+  // funciona tanto no painel lateral nativo quanto no iframe de fallback
+  // (nenhum dos dois é sandboxed).
+  if (!window.confirm('Tem certeza que deseja criar este ticket?')) return;
+
   const btn = $('submit');
   btn.disabled = true;
   btn.textContent = 'Salvando...';

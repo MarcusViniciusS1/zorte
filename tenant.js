@@ -1095,7 +1095,10 @@ function showTicketCommentToast(notification) {
 mountLauncher();
 startCnpjScanner();
 checkForNewTicketComments();
-__ztNotifInterval = setInterval(checkForNewTicketComments, 20000);
+// 5s (não 20s) — o atraso pra notificação chegar era perceptível demais.
+// A consulta é leve (poucas linhas, indexado por atendente), 5s é seguro
+// pro tamanho do time.
+__ztNotifInterval = setInterval(checkForNewTicketComments, 5000);
 __ztInterval = setInterval(async () => {
   mountLauncher();
   // Espera a busca de empresa (assíncrona) terminar antes do auto-upsert —

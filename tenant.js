@@ -24,18 +24,23 @@ if (window.__ztTenantShutdown) {
   const b = document.getElementById('zt-launcher'); if (b) b.remove();
   const w = document.getElementById('zt-drawer-wrap'); if (w) w.remove();
   const p = document.getElementById('zt-company-panel'); if (p) p.remove();
+  const t = document.getElementById('zt-comment-toast'); if (t) t.remove();
 })();
 let __ztInterval = null;
+let __ztNotifInterval = null;
 let __ztWidgetClickHandler = null;
 let __ztKeydownHandler = null;
 window.__ztTenantShutdown = function () {
   try { clearInterval(__ztInterval); } catch (e) {}
+  try { clearInterval(__ztNotifInterval); } catch (e) {}
   const oldBtn = document.getElementById('zt-launcher');
   if (oldBtn) oldBtn.remove();
   const oldDrawer = document.getElementById('zt-drawer-wrap');
   if (oldDrawer) oldDrawer.remove();
   const oldPanel = document.getElementById('zt-company-panel');
   if (oldPanel) oldPanel.remove();
+  const oldToast = document.getElementById('zt-comment-toast');
+  if (oldToast) oldToast.remove();
   // cnpjScannerInstance é declarado mais abaixo neste mesmo script; esta
   // função só é CHAMADA por uma futura reinjeção (depois que o script todo já
   // rodou), então a referência já está inicializada nesse momento.
@@ -1003,9 +1008,94 @@ function notifyIfConversationChanged() {
   chrome.runtime.sendMessage({ action: 'conversationChanged', sessionId }).catch(() => {});
 }
 
+// ---- Aviso de comentário novo em ticket ----
+// Quando alguém comenta num ticket "envolvendo" o atendente logado (ver
+// notificação criada em backend/index.js — POST /api/ticket_notes), avisa
+// aqui na página do Crisp: se for 1 ticket só, um toast clicável que já
+// abre o drawer direto naquele ticket; se for mais de um, não dá pra abrir
+// todos de uma vez, então só marca os tickets como "não lido" (bolinha) na
+// lista da aba Consultar do drawer (ver renderTicketRow em drawer.js).
+//
+// zt_seen_notification_ids guarda os ids de notificação já processados —
+// sobrevive a reload de aba/extensão (chrome.storage.local, não uma
+// variável em memória), pra não repetir o toast/marcação a cada poll
+// enquanto a notificação continuar não lida. Primeira vez que corre (nada
+// salvo ainda) só estabelece a linha de base sem disparar nada — senão toda
+// notificação não lida acumulada desde sempre viraria aviso de uma vez.
+async function checkForNewTicketComments() {
+  let resp;
+  try {
+    resp = await chrome.runtime.sendMessage({ action: 'getUnreadNotifications' });
+  } catch (e) { return; }
+  if (!resp || !resp.ok) return;
+  const list = (resp.data && resp.data.data) || [];
+
+  const stored = await chrome.storage.local.get({ zt_seen_notification_ids: null });
+  const isFirstRun = stored.zt_seen_notification_ids == null;
+  const seen = new Set(stored.zt_seen_notification_ids || []);
+
+  const fresh = list.filter((n) => n.ticket_id && !seen.has(n.id));
+  for (const n of list) seen.add(n.id);
+  await chrome.storage.local.set({ zt_seen_notification_ids: [...seen] });
+
+  if (isFirstRun || !fresh.length) return;
+
+  const ticketIds = [...new Set(fresh.map((n) => n.ticket_id))];
+  const unreadStored = await chrome.storage.local.get({ zt_unread_ticket_ids: [] });
+  const unread = new Set(unreadStored.zt_unread_ticket_ids || []);
+  for (const id of ticketIds) unread.add(id);
+  await chrome.storage.local.set({ zt_unread_ticket_ids: [...unread] });
+  chrome.runtime.sendMessage({ action: 'unreadTicketsChanged' }).catch(() => {});
+
+  if (ticketIds.length === 1) {
+    showTicketCommentToast(fresh.find((n) => n.ticket_id === ticketIds[0]));
+  }
+}
+
+function showTicketCommentToast(notification) {
+  const old = document.getElementById('zt-comment-toast');
+  if (old) old.remove();
+
+  const ticket = notification.ticket;
+  const label = ticket ? `#${ticket.ticket_number ?? ''} ${ticket.subject ?? ''}`.trim() : 'um ticket';
+
+  const toast = document.createElement('div');
+  toast.id = 'zt-comment-toast';
+  toast.style.cssText =
+    'position:fixed;bottom:24px;right:24px;z-index:2147483647;max-width:300px;cursor:pointer;' +
+    'background:#18181b;border:1px solid #3f3f46;border-left:3px solid #ef4444;border-radius:10px;' +
+    'padding:12px 16px 12px 14px;box-shadow:0 8px 28px rgba(0,0,0,.45);color:#fff;' +
+    'font:13px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;';
+  toast.innerHTML =
+    '<div style="font-weight:700;margin-bottom:4px;">💬 Novo comentário</div>' +
+    '<div style="color:#a1a1aa;">' + label + ' — clique para abrir</div>';
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.textContent = '×';
+  close.title = 'Fechar';
+  close.style.cssText = 'position:absolute;top:2px;right:6px;background:transparent;border:0;color:#71717a;font-size:15px;cursor:pointer;padding:2px 4px;';
+  close.addEventListener('click', (e) => { e.stopPropagation(); toast.remove(); });
+  toast.appendChild(close);
+
+  toast.addEventListener('click', async () => {
+    toast.remove();
+    if (notification.ticket_id) {
+      await chrome.storage.local.set({ zt_pending_open_ticket: notification.ticket_id });
+      chrome.runtime.sendMessage({ action: 'openTicketInDrawer', ticketId: notification.ticket_id }).catch(() => {});
+    }
+    openDrawer();
+  });
+
+  document.body.appendChild(toast);
+  setTimeout(() => { if (toast.isConnected) toast.remove(); }, 10000);
+}
+
 // O Crisp é uma SPA e recria o DOM; reinsere o botão periodicamente se sumir.
 mountLauncher();
 startCnpjScanner();
+checkForNewTicketComments();
+__ztNotifInterval = setInterval(checkForNewTicketComments, 20000);
 __ztInterval = setInterval(async () => {
   mountLauncher();
   // Espera a busca de empresa (assíncrona) terminar antes do auto-upsert —

@@ -226,6 +226,59 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // Notificações não lidas de quem está logado — usado por tenant.js pra
+  // avisar (toast na página do Crisp) quando alguém comenta num ticket, e
+  // por drawer.js pra marcar ticket como "não lido" na aba Consultar.
+  if (request.action === "getUnreadNotifications") {
+    (async () => {
+      const { zt_attendant } = await chrome.storage.local.get('zt_attendant');
+      if (!zt_attendant || !zt_attendant.id) { sendResponse({ ok: true, data: { data: [] } }); return; }
+      const q = new URLSearchParams();
+      q.set('eq.attendant_id', zt_attendant.id);
+      q.set('eq.read', 'false');
+      q.set('embed', 'ticket');
+      q.set('order_by', 'created_at');
+      q.set('order_dir', 'desc');
+      sendResponse(await apiGet(`/notifications?${q.toString()}`));
+    })();
+    return true;
+  }
+
+  // Marca como lidas todas as notificações de quem está logado pra UM
+  // ticket específico — chamado quando o ticket é aberto no drawer (ver
+  // showTicketDetail em drawer.js), pra sair do estado "não lido".
+  if (request.action === "markTicketNotificationsRead") {
+    (async () => {
+      const { zt_attendant } = await chrome.storage.local.get('zt_attendant');
+      if (!zt_attendant || !zt_attendant.id || !request.ticketId) { sendResponse({ ok: true, count: 0 }); return; }
+      const q = new URLSearchParams();
+      q.set('eq.attendant_id', zt_attendant.id);
+      q.set('eq.ticket_id', request.ticketId);
+      q.set('eq.read', 'false');
+      const r = await apiGet(`/notifications?${q.toString()}`);
+      const list = (r.data && r.data.data) || [];
+      for (const n of list) await apiPatch(`/notifications/${n.id}`, { read: true });
+      sendResponse({ ok: true, count: list.length });
+    })();
+    return true;
+  }
+
+  // Busca 1 ticket específico por id, com os mesmos embeds da lista — usado
+  // quando o drawer precisa abrir direto num ticket que talvez não esteja
+  // na lista de "em aberto" já carregada (ex.: veio de um toast de
+  // comentário novo, ver tenant.js).
+  if (request.action === "getTicketById") {
+    (async () => {
+      const q = new URLSearchParams();
+      q.set('eq.id', request.ticketId);
+      q.set('embed', 'companies,attendant,contact,creator');
+      const r = await apiGet(`/tickets?${q.toString()}`);
+      if (!r || !r.ok) { sendResponse(r); return; }
+      sendResponse({ ok: true, data: { data: (r.data.data || [])[0] || null } });
+    })();
+    return true;
+  }
+
   // Catálogo de módulos/preços pra aba "Módulos" do drawer — busca e
   // agrupamento por categoria acontecem no drawer.js, aqui só devolve tudo.
   if (request.action === "getModules") {

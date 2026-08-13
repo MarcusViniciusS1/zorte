@@ -127,6 +127,57 @@ chrome.storage.local.get({ zt_attendant: null }).then(({ zt_attendant }) => {
   myAttendantId = (zt_attendant && zt_attendant.id) || null;
 });
 
+// Tickets com comentário novo ainda não visto (ver tenant.js, que escreve
+// nessa mesma chave ao detectar notificação nova) — cache local pra
+// renderTicketRow não precisar ler o storage a cada re-render.
+let unreadTicketIds = new Set();
+// unreadVersion sobe a cada mutação (leitura do storage OU marcação direta
+// de lido) — sem isso, um refreshUnreadTicketIds() que começou a ler o
+// storage ANTES de um clique em "marcar como lido" pode terminar de ler
+// DEPOIS e sobrescrever unreadTicketIds com o valor antigo (a leitura foi
+// disparada antes, mas resolve depois — corrida clássica). Descartando o
+// resultado de qualquer leitura cuja versão não é mais a mais recente,
+// a mutação direta (mais recente por definição) sempre vence.
+let unreadVersion = 0;
+async function refreshUnreadTicketIds() {
+  const versionBefore = unreadVersion;
+  const { zt_unread_ticket_ids } = await chrome.storage.local.get({ zt_unread_ticket_ids: [] });
+  if (unreadVersion !== versionBefore) return; // mudou no meio tempo — descarta, já tem algo mais novo
+  unreadTicketIds = new Set(zt_unread_ticket_ids || []);
+}
+// Fire-and-forget: grava no storage e avisa o backend, mas quem chama não
+// espera isso pra atualizar a tela (ver showTicketDetail) — a mutação em
+// memória (delete + unreadVersion++) já aconteceu antes, síncrona.
+async function persistTicketRead(ticketId) {
+  const { zt_unread_ticket_ids } = await chrome.storage.local.get({ zt_unread_ticket_ids: [] });
+  await chrome.storage.local.set({ zt_unread_ticket_ids: (zt_unread_ticket_ids || []).filter((id) => id !== ticketId) });
+  chrome.runtime.sendMessage({ action: 'markTicketNotificationsRead', ticketId }).catch(() => {});
+}
+
+// Abre o detalhe de UM ticket específico direto na aba Consultar — usado ao
+// clicar no toast de comentário novo (tenant.js) ou ao abrir o drawer com
+// um "pendente" salvo (ver openPendingTicketIfAny). Busca no que já está
+// carregado antes de bater no backend, pra não esperar sem necessidade.
+async function openTicketById(ticketId) {
+  setMode('consult');
+  const existing = openTickets.find((t) => t.id === ticketId);
+  if (existing) { showTicketDetail(existing); return; }
+  const r = await send('getTicketById', { ticketId });
+  const t = r && r.ok && r.data && r.data.data;
+  if (t) showTicketDetail(t);
+}
+// Hand-off entre tenant.js (clique no toast) e o drawer: quando o painel
+// nativo estava FECHADO, chrome.sidePanel.open() recarrega esta página do
+// zero, então a mensagem direta (ver onMessage abaixo) já foi perdida — o
+// valor salvo no storage é o que sobrevive pra esse caso.
+async function openPendingTicketIfAny() {
+  const { zt_pending_open_ticket } = await chrome.storage.local.get({ zt_pending_open_ticket: null });
+  if (!zt_pending_open_ticket) return;
+  await chrome.storage.local.remove('zt_pending_open_ticket');
+  await openTicketById(zt_pending_open_ticket);
+}
+openPendingTicketIfAny();
+
 function setMode(mode) {
   const consult = mode === 'consult';
   const modules = mode === 'modules';
@@ -216,13 +267,19 @@ function buildTicketBadges(t) {
 function renderTicketRow(t) {
   const row = document.createElement('button');
   row.type = 'button';
-  row.className = 'ticket-row';
+  row.className = unreadTicketIds.has(t.id) ? 'ticket-row ticket-row--unread' : 'ticket-row';
   row.style.width = '100%';
   row.style.font = 'inherit';
   row.addEventListener('click', () => showTicketDetail(t));
 
   const top = document.createElement('div');
   top.className = 'ticket-row__top';
+  if (unreadTicketIds.has(t.id)) {
+    const dot = document.createElement('span');
+    dot.className = 'unread-dot';
+    dot.title = 'Comentário novo, ainda não visto';
+    top.appendChild(dot);
+  }
   const subject = document.createElement('span');
   subject.className = 'ticket-row__subject';
   subject.textContent = t.subject || '(sem assunto)';
@@ -292,6 +349,16 @@ function detailRow(label, value) {
 // ação (nem editar, nem abrir link externo) — a única navegação daqui é o
 // botão "Voltar" (pra lista) ou o "Fechar" do drawer, no cabeçalho.
 function showTicketDetail(t) {
+  // Abrir o ticket é o que conta como "visto" pro destaque de comentário
+  // novo — tira o negrito/bolinha da lista na hora (síncrono, não espera
+  // storage/backend) e persiste em segundo plano.
+  if (unreadTicketIds.has(t.id)) {
+    unreadTicketIds.delete(t.id);
+    unreadVersion++;
+    renderTicketsList();
+    persistTicketRead(t.id);
+  }
+
   const content = $('ticketDetailContent');
   content.innerHTML = '';
 
@@ -538,7 +605,7 @@ async function loadOpenTickets() {
   btn.disabled = true;
   list.innerHTML = '';
 
-  const r = await send('getOpenTickets', {});
+  const [r] = await Promise.all([send('getOpenTickets', {}), refreshUnreadTicketIds()]);
   btn.disabled = false;
 
   if (!r || !r.ok) {
@@ -1180,6 +1247,20 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
         loadOrResetForSession(r);
         autoFillHistoryCompany();
       });
+    }
+
+    // Clique no toast de comentário novo (ver tenant.js) com o painel JÁ
+    // aberto — abre direto nesse ticket. Se o painel estava fechado, essa
+    // mensagem se perde no meio da recarga; quem cobre esse caso é o valor
+    // salvo no storage (ver openPendingTicketIfAny, chamado ao carregar).
+    if (request && request.action === 'openTicketInDrawer' && request.ticketId) {
+      openTicketById(request.ticketId);
+    }
+
+    // tenant.js marcou ticket(s) como "não lido" enquanto o painel já
+    // estava aberto — atualiza a lista sem esperar o próximo carregamento.
+    if (request && request.action === 'unreadTicketsChanged') {
+      refreshUnreadTicketIds().then(() => { if (ticketsLoaded) renderTicketsList(); });
     }
   });
 }

@@ -1166,12 +1166,20 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
     // tenant.js) — troca pro rascunho da conversa nova se já existir um (ver
     // loadOrResetForSession), senão limpa os dados do cliente ANTERIOR
     // (nome, telefone, e-mail, empresa, tags, issues...) pra não vazar
-    // informação errada pro ticket da conversa nova. Módulos/Histórico
-    // seguem a mesma regra — não fica preso na empresa da conversa anterior.
+    // informação errada pro ticket da conversa nova. Módulos segue a mesma
+    // regra de limpar (troca manual se quiser outra empresa). Histórico
+    // também limpa, mas ADEMAIS já busca sozinho a empresa da conversa
+    // nova (se identificada) — sem isso, a aba ficava sem informação até o
+    // atendente trocar de aba e voltar (só aí `autoFillHistoryCompany` do
+    // setMode rodava de novo).
     if (request && request.action === 'conversationChanged') {
       clearModuleCompany();
       clearHistoryCompany();
-      send('getContext', {}).then((r) => { lastContext = r; loadOrResetForSession(r); });
+      send('getContext', {}).then((r) => {
+        lastContext = r;
+        loadOrResetForSession(r);
+        autoFillHistoryCompany();
+      });
     }
   });
 }

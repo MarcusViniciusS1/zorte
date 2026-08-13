@@ -104,10 +104,13 @@
       background: linear-gradient(135deg, var(--primary), var(--primary2)); border-radius: 5px;
       transition: transform .2s ease; z-index: 0;
     }
-    .mode-switch--consult .mode-switch__thumb { transform: translateX(66px); }
-    .mode-switch--modules .mode-switch__thumb { transform: translateX(132px); }
-    .mode-switch--contacts .mode-switch__thumb { transform: translateX(198px); }
-    .mode-switch--history .mode-switch__thumb { transform: translateX(264px); }
+    /* Ordem visual dos botões: Criar, Histórico, Consultar, Módulos, Contatos
+       (ver header) — os deslocamentos aqui seguem essa mesma ordem, senão a
+       bolinha deslizante para embaixo do botão errado. */
+    .mode-switch--history .mode-switch__thumb { transform: translateX(66px); }
+    .mode-switch--consult .mode-switch__thumb { transform: translateX(132px); }
+    .mode-switch--modules .mode-switch__thumb { transform: translateX(198px); }
+    .mode-switch--contacts .mode-switch__thumb { transform: translateX(264px); }
     .mode-switch__option {
       position: relative; z-index: 1; background: transparent; border: 0; white-space: nowrap;
       color: var(--muted); font: inherit; font-size: 10px; font-weight: 700; cursor: pointer;
@@ -161,10 +164,10 @@
     <div class="mode-switch" id="modeSwitch">
       <div class="mode-switch__thumb"></div>
       <button type="button" class="mode-switch__option active" id="modeCreate" data-mode="create" title="Criar ticket">Criar</button>
+      <button type="button" class="mode-switch__option" id="modeHistory" data-mode="history" title="Histórico de atendimentos">Histórico</button>
       <button type="button" class="mode-switch__option" id="modeConsult" data-mode="consult" title="Consultar ticket">Consultar</button>
       <button type="button" class="mode-switch__option" id="modeModules" data-mode="modules" title="Módulos">Módulos</button>
       <button type="button" class="mode-switch__option" id="modeContacts" data-mode="contacts" title="Contatos">Contatos</button>
-      <button type="button" class="mode-switch__option" id="modeHistory" data-mode="history" title="Histórico de atendimentos">Histórico</button>
     </div>
     <button class="close" id="close" title="Fechar">&times;</button>
   </header>

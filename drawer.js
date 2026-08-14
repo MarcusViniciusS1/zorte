@@ -579,6 +579,7 @@ function buildTicketActions(t) {
 // chama setMode(currentMode) pra restaurar a aba certa depois.
 function showDetailPanel() {
   $('createPanel').style.display = 'none';
+  $('inboxPanel').style.display = 'none';
   $('consultPanel').style.display = 'none';
   $('modulesPanel').style.display = 'none';
   $('contactsPanel').style.display = 'none';

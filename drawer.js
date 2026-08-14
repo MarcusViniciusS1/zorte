@@ -345,6 +345,25 @@ function detailRow(label, value) {
   return row;
 }
 
+// Acha os atendentes @mencionados no texto final da nota (não num estado
+// acumulado à parte) — mesmo mecanismo do site (TicketDetail.tsx). Nomes
+// mais longos primeiro pra "Ana Paula" não ser lido como um match parcial
+// de "Ana". Best-effort: se a chamada falhar, não atrapalha quem só queria
+// salvar a nota (ela já foi salva antes disso rodar).
+function extractMentionedIds(text) {
+  const found = new Set();
+  const sorted = [...attendantsList].sort((a, b) => b.name.length - a.name.length);
+  for (const a of sorted) {
+    if (text.includes(`@${a.name}`)) found.add(a.id);
+  }
+  return [...found];
+}
+function notifyMentions(ticketId, noteText) {
+  const attendant_ids = extractMentionedIds(noteText);
+  if (!attendant_ids.length) return;
+  send('notifyMentions', { ticket_id: ticketId, attendant_ids }).catch(() => {});
+}
+
 // Visualização compacta e somente-leitura de 1 ticket: só dados, nenhuma
 // ação (nem editar, nem abrir link externo) — a única navegação daqui é o
 // botão "Voltar" (pra lista) ou o "Fechar" do drawer, no cabeçalho.
@@ -434,10 +453,74 @@ function showTicketDetail(t) {
   content.appendChild(notesList);
   loadTicketNotes(t.id, notesList);
 
+  // Textarea + dropdown de @menção — mesmo mecanismo do site
+  // (TicketDetail.tsx): "@parcial" logo antes do cursor, sem espaço no
+  // meio, sugere atendentes (exceto quem está logado). `.combo`/`.combo-
+  // list` já existem no CSS deste arquivo, usados nos outros comboboxes.
+  const noteWrap = document.createElement('div');
+  noteWrap.className = 'combo';
+  noteWrap.style.marginTop = '10px';
+
   const noteInput = document.createElement('textarea');
-  noteInput.placeholder = 'Adicionar nota...';
-  noteInput.style.cssText = 'margin-top:10px; min-height:60px;';
-  content.appendChild(noteInput);
+  noteInput.placeholder = 'Adicionar nota... (use @ pra marcar um atendente)';
+  noteInput.style.cssText = 'min-height:60px;';
+  noteWrap.appendChild(noteInput);
+
+  const mentionList = document.createElement('div');
+  mentionList.className = 'combo-list';
+  mentionList.style.display = 'none';
+  noteWrap.appendChild(mentionList);
+
+  content.appendChild(noteWrap);
+
+  let mentionStart = null;
+  let mentionQuery = '';
+
+  function renderMentionSuggestions() {
+    mentionList.innerHTML = '';
+    if (mentionStart == null) { mentionList.style.display = 'none'; return; }
+    const q = mentionQuery.toLowerCase();
+    const suggestions = attendantsList
+      .filter((a) => a.id !== myAttendantId && a.name.toLowerCase().includes(q))
+      .slice(0, 6);
+    if (!suggestions.length) { mentionList.style.display = 'none'; return; }
+    for (const a of suggestions) {
+      const item = document.createElement('div');
+      item.className = 'combo-item';
+      item.textContent = `@${a.name}`;
+      item.addEventListener('mousedown', (e) => { e.preventDefault(); pickMention(a); });
+      mentionList.appendChild(item);
+    }
+    mentionList.style.display = 'block';
+  }
+
+  function pickMention(a) {
+    if (mentionStart == null) return;
+    const before = noteInput.value.slice(0, mentionStart);
+    const after = noteInput.value.slice(mentionStart + 1 + mentionQuery.length);
+    const inserted = `@${a.name} `;
+    noteInput.value = before + inserted + after;
+    mentionStart = null;
+    mentionQuery = '';
+    renderMentionSuggestions();
+    const cursor = before.length + inserted.length;
+    noteInput.focus();
+    noteInput.setSelectionRange(cursor, cursor);
+  }
+
+  noteInput.addEventListener('input', () => {
+    const value = noteInput.value;
+    const pos = noteInput.selectionStart;
+    const uptoCursor = value.slice(0, pos);
+    const atIndex = uptoCursor.lastIndexOf('@');
+    if (atIndex === -1) { mentionStart = null; renderMentionSuggestions(); return; }
+    const between = uptoCursor.slice(atIndex + 1);
+    if (/\s/.test(between)) { mentionStart = null; renderMentionSuggestions(); return; }
+    mentionStart = atIndex;
+    mentionQuery = between;
+    renderMentionSuggestions();
+  });
+  noteInput.addEventListener('blur', () => setTimeout(() => { mentionStart = null; renderMentionSuggestions(); }, 150));
 
   const noteMsg = document.createElement('div');
   noteMsg.className = 'validate-msg';
@@ -463,6 +546,7 @@ function showTicketDetail(t) {
     noteBtn.disabled = false;
     if (r && r.ok) {
       noteInput.value = '';
+      notifyMentions(t.id, text);
       loadTicketNotes(t.id, notesList);
     } else {
       noteMsg.textContent = (r && r.error) || 'Não foi possível salvar a nota.';
@@ -1969,12 +2053,16 @@ $('tagInput').addEventListener('keydown', (e) => {
 // O campo já vem preenchido com quem está logado (sabemos o id exato — não
 // precisa mais casar nome por aproximação), mas continua editável: trocar
 // aqui vale só para o ticket atual.
+// attendantsList: guardado à parte (não só nas <option> do select) pra
+// alimentar o autocomplete de @menção nas notas (ver showTicketDetail).
+let attendantsList = [];
 Promise.all([
   send('getAttendants', {}),
   chrome.storage.local.get({ zt_attendant: null }),
 ]).then(([r, { zt_attendant }]) => {
   if (!r || !r.ok) return;
   const list = ((r.data && r.data.data) || []).filter((a) => a.active !== false);
+  attendantsList = list;
   const sel = $('attendant');
   for (const a of list) {
     const opt = document.createElement('option');

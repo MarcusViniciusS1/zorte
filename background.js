@@ -226,6 +226,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // Aviso (sino + Discord) de quem foi @mencionado numa nota — mesma rota
+  // que TicketDetail.tsx usa no site (POST /api/mentions/notify).
+  if (request.action === "notifyMentions") {
+    apiPost('/mentions/notify', { ticket_id: request.ticket_id, attendant_ids: request.attendant_ids }).then(sendResponse);
+    return true;
+  }
+
   // Notificações não lidas de quem está logado — usado por tenant.js pra
   // avisar (toast na página do Crisp) quando alguém comenta num ticket, e
   // por drawer.js pra marcar ticket como "não lido" na aba Consultar.

@@ -104,13 +104,14 @@
       background: linear-gradient(135deg, var(--primary), var(--primary2)); border-radius: 5px;
       transition: transform .2s ease; z-index: 0;
     }
-    /* Ordem visual dos botões: Criar, Histórico, Consultar, Módulos, Contatos
-       (ver header) — os deslocamentos aqui seguem essa mesma ordem, senão a
-       bolinha deslizante para embaixo do botão errado. */
-    .mode-switch--history .mode-switch__thumb { transform: translateX(66px); }
-    .mode-switch--consult .mode-switch__thumb { transform: translateX(132px); }
-    .mode-switch--modules .mode-switch__thumb { transform: translateX(198px); }
-    .mode-switch--contacts .mode-switch__thumb { transform: translateX(264px); }
+    /* Ordem visual dos botões: Criar, Entrada, Histórico, Consultar, Módulos,
+       Contatos (ver header) — os deslocamentos aqui seguem essa mesma ordem,
+       senão a bolinha deslizante para embaixo do botão errado. */
+    .mode-switch--inbox .mode-switch__thumb { transform: translateX(66px); }
+    .mode-switch--history .mode-switch__thumb { transform: translateX(132px); }
+    .mode-switch--consult .mode-switch__thumb { transform: translateX(198px); }
+    .mode-switch--modules .mode-switch__thumb { transform: translateX(264px); }
+    .mode-switch--contacts .mode-switch__thumb { transform: translateX(330px); }
     .mode-switch__option {
       position: relative; z-index: 1; background: transparent; border: 0; white-space: nowrap;
       color: var(--muted); font: inherit; font-size: 10px; font-weight: 700; cursor: pointer;
@@ -170,6 +171,7 @@
     <div class="mode-switch" id="modeSwitch">
       <div class="mode-switch__thumb"></div>
       <button type="button" class="mode-switch__option active" id="modeCreate" data-mode="create" title="Criar ticket">Criar</button>
+      <button type="button" class="mode-switch__option" id="modeInbox" data-mode="inbox" title="Caixa de entrada — tickets com atividade nova">Entrada</button>
       <button type="button" class="mode-switch__option" id="modeHistory" data-mode="history" title="Histórico de atendimentos">Histórico</button>
       <button type="button" class="mode-switch__option" id="modeConsult" data-mode="consult" title="Consultar ticket">Consultar</button>
       <button type="button" class="mode-switch__option" id="modeModules" data-mode="modules" title="Módulos">Módulos</button>
@@ -357,14 +359,21 @@
       <div id="ticketsMsg" class="validate-msg"></div>
       <div id="ticketsList" style="display:flex; flex-direction:column; gap:8px;"></div>
     </div>
+  </div>
 
-    <!-- Visualização compacta e somente-leitura de 1 ticket: sem nenhuma
-         ação além de voltar pra lista (o "Fechar" do drawer, no cabeçalho,
-         continua disponível igual em qualquer tela). -->
-    <div id="ticketDetailView" style="display:none; flex-direction:column; gap:12px;">
-      <button type="button" class="btn ghost" id="ticketDetailBack" style="align-self:flex-start; padding:6px 10px;">← Voltar</button>
-      <div id="ticketDetailContent"></div>
+  <!-- Aba "Caixa de Entrada": tickets com notificação não lida pra quem
+       está logado (ver GET /api/inbox) — pega o caso de quem não estava
+       online quando alguém comentou, e por isso perdeu o toast/aviso (ver
+       checkForNewTicketComments em tenant.js). Cada linha mostra quem criou,
+       quem é responsável agora, e quem já comentou. Abrir o ticket marca a
+       notificação como lida e ele sai da lista sozinho. -->
+  <div id="inboxPanel" style="display:none; flex:1; overflow-y:auto; padding:16px; flex-direction:column; gap:10px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+      <span class="muted" style="font-size:12px;">Tickets com atividade nova pra você</span>
+      <button type="button" class="btn-validate" id="refreshInbox" style="width:auto; margin:0; padding:6px 10px; font-size:12px;">↻ Atualizar</button>
     </div>
+    <div id="inboxMsg" class="validate-msg"></div>
+    <div id="inboxTicketsList" style="display:flex; flex-direction:column; gap:8px;"></div>
   </div>
 
   <!-- Aba "Módulos": busca a empresa (nome/CNPJ/tenant — igual ao campo
@@ -482,6 +491,16 @@
       </div>
     </div>
     <div id="historyTicketsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+  </div>
+
+  <!-- Visualização de 1 ticket — compartilhada por QUALQUER aba que abra um
+       ticket (Consultar, Histórico, ou o toast de comentário novo). Fica
+       FORA das abas de propósito (não dentro de #consultPanel) pra abrir
+       sem trocar de aba visualmente — "Voltar" restaura a aba de onde veio
+       (ver showTicketDetail/setMode em drawer.js). -->
+  <div id="ticketDetailView" style="display:none; flex:1; overflow-y:auto; padding:16px; flex-direction:column; gap:12px;">
+    <button type="button" class="btn ghost" id="ticketDetailBack" style="align-self:flex-start; padding:6px 10px;">← Voltar</button>
+    <div id="ticketDetailContent"></div>
   </div>
   </div>
 

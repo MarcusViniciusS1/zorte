@@ -370,6 +370,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // Aba "Caixa de Entrada" — tickets com notificação não lida (ver
+  // GET /api/inbox em backend/index.js).
+  if (request.action === "getInbox") {
+    apiGet('/inbox').then(sendResponse);
+    return true;
+  }
+
   // Registra 1 "visita" ao suporte pra essa conversa do Crisp (ver
   // Navegador/tenant.js, maybeRecordSupportVisitForActiveConversation) — só
   // pra medir recorrência de contato por empresa, sem depender de ticket.

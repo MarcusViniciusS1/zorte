@@ -154,13 +154,13 @@ async function persistTicketRead(ticketId) {
   chrome.runtime.sendMessage({ action: 'markTicketNotificationsRead', ticketId }).catch(() => {});
 }
 
-// Abre o detalhe de UM ticket específico direto na aba Consultar — usado ao
-// clicar no toast de comentário novo (tenant.js) ou ao abrir o drawer com
-// um "pendente" salvo (ver openPendingTicketIfAny). Busca no que já está
-// carregado antes de bater no backend, pra não esperar sem necessidade.
+// Abre o detalhe de UM ticket específico sem trocar de aba (ver
+// showDetailPanel) — usado ao clicar no toast de comentário novo
+// (tenant.js) ou ao abrir o drawer com um "pendente" salvo (ver
+// openPendingTicketIfAny). Busca no que já está carregado (Consultar OU
+// Histórico) antes de bater no backend, pra não esperar sem necessidade.
 async function openTicketById(ticketId) {
-  setMode('consult');
-  const existing = openTickets.find((t) => t.id === ticketId);
+  const existing = openTickets.find((t) => t.id === ticketId) || historyTickets.find((t) => t.id === ticketId);
   if (existing) { showTicketDetail(existing); return; }
   const r = await send('getTicketById', { ticketId });
   const t = r && r.ok && r.data && r.data.data;
@@ -178,21 +178,32 @@ async function openPendingTicketIfAny() {
 }
 openPendingTicketIfAny();
 
+// Modo "de verdade" (nunca um pseudo-estado de "vendo detalhe") — usado por
+// "Voltar" no detalhe do ticket pra saber pra qual aba restaurar. Abrir um
+// ticket (ver showDetailPanel) NÃO muda isso nem o destaque do mode-switch —
+// só esconde o painel da aba por cima do detalhe, então visualmente o
+// atendente nunca "sai" da aba Consultar/Histórico ao abrir um ticket.
+let currentMode = 'create';
+
 function setMode(mode) {
+  const inbox = mode === 'inbox';
   const consult = mode === 'consult';
   const modules = mode === 'modules';
   const contacts = mode === 'contacts';
   const history = mode === 'history';
+  $('modeSwitch').classList.toggle('mode-switch--inbox', inbox);
   $('modeSwitch').classList.toggle('mode-switch--consult', consult);
   $('modeSwitch').classList.toggle('mode-switch--modules', modules);
   $('modeSwitch').classList.toggle('mode-switch--contacts', contacts);
   $('modeSwitch').classList.toggle('mode-switch--history', history);
   $('modeCreate').classList.toggle('active', mode === 'create');
+  $('modeInbox').classList.toggle('active', inbox);
   $('modeConsult').classList.toggle('active', consult);
   $('modeModules').classList.toggle('active', modules);
   $('modeContacts').classList.toggle('active', contacts);
   $('modeHistory').classList.toggle('active', history);
   $('createPanel').style.display = mode === 'create' ? 'contents' : 'none';
+  $('inboxPanel').style.display = inbox ? 'flex' : 'none';
   $('consultPanel').style.display = consult ? 'flex' : 'none';
   $('modulesPanel').style.display = modules ? 'flex' : 'none';
   $('contactsPanel').style.display = contacts ? 'flex' : 'none';
@@ -201,6 +212,7 @@ function setMode(mode) {
   // visualização compacta de um ticket de uma visita anterior.
   $('ticketDetailView').style.display = 'none';
   $('ticketsListView').style.display = 'flex';
+  if (inbox && !inboxLoaded) loadInbox();
   if (consult && !ticketsLoaded) loadOpenTickets();
 
   if (modules) {
@@ -217,8 +229,11 @@ function setMode(mode) {
   }
 
   if (history) autoFillHistoryCompany();
+
+  currentMode = mode;
 }
 $('modeCreate').addEventListener('click', () => setMode('create'));
+$('modeInbox').addEventListener('click', () => setMode('inbox'));
 $('modeConsult').addEventListener('click', () => setMode('consult'));
 $('modeModules').addEventListener('click', () => setMode('modules'));
 $('modeContacts').addEventListener('click', () => setMode('contacts'));
@@ -558,9 +573,22 @@ function buildTicketActions(t) {
   return wrap;
 }
 
-// Visualização compacta e somente-leitura de 1 ticket: só dados, nenhuma
-// ação (nem editar, nem abrir link externo) — a única navegação daqui é o
-// botão "Voltar" (pra lista) ou o "Fechar" do drawer, no cabeçalho.
+// Esconde qualquer painel de aba e mostra só o detalhe do ticket — NÃO mexe
+// no mode-switch (destaque/thumb continuam na aba de onde veio), pra abrir
+// um ticket não "trocar de aba" visualmente. "Voltar" (ver ticketDetailBack)
+// chama setMode(currentMode) pra restaurar a aba certa depois.
+function showDetailPanel() {
+  $('createPanel').style.display = 'none';
+  $('consultPanel').style.display = 'none';
+  $('modulesPanel').style.display = 'none';
+  $('contactsPanel').style.display = 'none';
+  $('historyPanel').style.display = 'none';
+  $('ticketDetailView').style.display = 'flex';
+}
+
+// Visualização de 1 ticket — dados + (se ainda aberto) notas e as ações
+// Assumir/Finalizar/Transferir (ver buildTicketActions). Compartilhada pelas
+// abas Consultar e Histórico, e pelo toast de comentário novo (tenant.js).
 function showTicketDetail(t) {
   // Abrir o ticket é o que conta como "visto" pro destaque de comentário
   // novo — tira o negrito/bolinha da lista na hora (síncrono, não espera
@@ -569,8 +597,16 @@ function showTicketDetail(t) {
     unreadTicketIds.delete(t.id);
     unreadVersion++;
     renderTicketsList();
-    persistTicketRead(t.id);
   }
+  // Sai da Caixa de Entrada na hora, e marca como lido no backend — SEMPRE,
+  // não só quando `unreadTicketIds` já sabia do ticket (essa é uma cache à
+  // parte, sincronizada pelo polling de tenant.js; a Caixa de Entrada vem
+  // direto de /api/inbox e pode ter um ticket que essa cache ainda não
+  // pegou). Sem efeito nenhum se não havia nada pra marcar (backend/local
+  // idempotentes).
+  inboxTickets = inboxTickets.filter((x) => x.id !== t.id);
+  renderInboxList();
+  persistTicketRead(t.id);
 
   const content = $('ticketDetailContent');
   content.innerHTML = '';
@@ -665,8 +701,7 @@ function showTicketDetail(t) {
     closedMsg.style.cssText = 'font-size:12px; margin-top:10px;';
     closedMsg.textContent = 'Ticket resolvido/fechado — somente leitura.';
     content.appendChild(closedMsg);
-    $('ticketsListView').style.display = 'none';
-    $('ticketDetailView').style.display = 'flex';
+    showDetailPanel();
     return;
   }
 
@@ -772,8 +807,7 @@ function showTicketDetail(t) {
   });
   content.appendChild(noteBtn);
 
-  $('ticketsListView').style.display = 'none';
-  $('ticketDetailView').style.display = 'flex';
+  showDetailPanel();
 }
 
 // Marca o ticket como visto por quem está logado e depois busca+desenha
@@ -845,10 +879,9 @@ async function loadTicketNotes(ticketId, container) {
   }
 }
 
-$('ticketDetailBack').addEventListener('click', () => {
-  $('ticketDetailView').style.display = 'none';
-  $('ticketsListView').style.display = 'flex';
-});
+// Restaura a aba de onde o ticket foi aberto (Consultar ou Histórico) — não
+// fica preso em Consultar só porque foi por ali que o detalhe é desenhado.
+$('ticketDetailBack').addEventListener('click', () => setMode(currentMode));
 
 // Busca por #, título, cliente (empresa/contato) ou palavra-chave na
 // descrição — tudo client-side, em cima do que já foi carregado.
@@ -921,6 +954,87 @@ async function loadOpenTickets() {
   renderTicketsList();
 }
 $('refreshTickets').addEventListener('click', loadOpenTickets);
+
+// ---- Caixa de Entrada (aba "Entrada" — tickets com notificação não lida
+// pra quem está logado, ver GET /api/inbox). Cada linha mostra quem criou,
+// quem é responsável agora, e quem já interagiu (comentou) — pra dar
+// contexto sem precisar abrir o ticket. Abrir o ticket (showTicketDetail)
+// já marca como lido e some sozinho da lista (ver bloco de "não lido"
+// dentro de showTicketDetail, mais abaixo). ----
+let inboxTickets = [];
+let inboxLoaded = false;
+
+function renderInboxRow(t) {
+  const row = document.createElement('button');
+  row.type = 'button';
+  row.className = 'ticket-row';
+  row.style.width = '100%';
+  row.style.font = 'inherit';
+  row.addEventListener('click', () => showTicketDetail(t));
+
+  const top = document.createElement('div');
+  top.className = 'ticket-row__top';
+  const subject = document.createElement('span');
+  subject.className = 'ticket-row__subject';
+  subject.textContent = t.subject || '(sem assunto)';
+  const number = document.createElement('span');
+  number.className = 'ticket-row__number';
+  number.textContent = t.ticket_number ? `#${t.ticket_number}` : '';
+  top.appendChild(subject);
+  top.appendChild(number);
+
+  row.appendChild(top);
+  row.appendChild(buildTicketBadges(t));
+
+  const people = document.createElement('div');
+  people.style.cssText = 'margin-top:6px; font-size:11px; color:var(--muted); text-align:left;';
+  const creatorName = (t.creator && t.creator.name) || '—';
+  const respName = (t.attendant && t.attendant.name) || '—';
+  const interactedNames = (t.interacted || []).map((a) => a.name);
+  const line1 = document.createElement('div');
+  line1.textContent = `Criado por ${creatorName} · Responsável: ${respName}`;
+  people.appendChild(line1);
+  if (interactedNames.length) {
+    const line2 = document.createElement('div');
+    line2.textContent = `Comentado por: ${interactedNames.join(', ')}`;
+    people.appendChild(line2);
+  }
+  row.appendChild(people);
+
+  return row;
+}
+
+function renderInboxList() {
+  const box = $('inboxTicketsList');
+  box.innerHTML = '';
+  const msg = $('inboxMsg');
+  if (!inboxTickets.length) {
+    msg.textContent = 'Nenhum ticket com atividade nova pra você.';
+    msg.className = 'validate-msg';
+    return;
+  }
+  msg.textContent = '';
+  for (const t of inboxTickets) box.appendChild(renderInboxRow(t));
+}
+
+async function loadInbox() {
+  const msg = $('inboxMsg');
+  const btn = $('refreshInbox');
+  btn.disabled = true;
+  msg.textContent = '';
+  msg.className = 'validate-msg';
+  const r = await send('getInbox', {});
+  btn.disabled = false;
+  if (!r || !r.ok) {
+    msg.textContent = (r && r.error) || 'Não foi possível carregar a caixa de entrada.';
+    msg.className = 'validate-msg warn';
+    return;
+  }
+  inboxTickets = (r.data && r.data.data) || [];
+  inboxLoaded = true;
+  renderInboxList();
+}
+$('refreshInbox').addEventListener('click', loadInbox);
 
 // ---- Contatos (aba "Contatos" — agenda: busca por nome, empresa ou
 // telefone entre todos os contatos cadastrados no sistema web). Mesmo padrão
@@ -1392,11 +1506,11 @@ function renderHistoryTicketRow(t) {
   row.className = 'ticket-row';
   row.style.width = '100%';
   row.style.font = 'inherit';
-  // O detalhe (dados/notas/ações) é compartilhado com a aba Consultar — abrir
-  // aqui troca pra ela, mesmo padrão de openTicketById (ver toast de
-  // comentário novo). Ticket resolvido/fechado abre igual, só que
+  // O detalhe (dados/notas/ações) é compartilhado com a aba Consultar, mas
+  // abrir aqui NÃO troca de aba (ver showDetailPanel) — "Voltar" retorna
+  // pro Histórico. Ticket resolvido/fechado abre igual, só que
   // showTicketDetail já esconde nota/ações sozinho pra esse caso.
-  row.addEventListener('click', () => { setMode('consult'); showTicketDetail(t); });
+  row.addEventListener('click', () => showTicketDetail(t));
 
   const top = document.createElement('div');
   top.className = 'ticket-row__top';
@@ -1437,7 +1551,15 @@ function renderHistoryTicketsList() {
     box.appendChild(empty);
     return;
   }
-  for (const t of filtered) box.appendChild(renderHistoryTicketRow(t));
+  // Não resolvido sempre acima de resolvido; dentro de cada grupo, mais
+  // recente primeiro (ordem de criação).
+  const sorted = [...filtered].sort((a, b) => {
+    const aClosed = CLOSED_STATUSES.has(a.status) ? 1 : 0;
+    const bClosed = CLOSED_STATUSES.has(b.status) ? 1 : 0;
+    if (aClosed !== bClosed) return aClosed - bClosed;
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+  for (const t of sorted) box.appendChild(renderHistoryTicketRow(t));
 }
 
 function showError(text) {
@@ -1570,6 +1692,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
     // estava aberto — atualiza a lista sem esperar o próximo carregamento.
     if (request && request.action === 'unreadTicketsChanged') {
       refreshUnreadTicketIds().then(() => { if (ticketsLoaded) renderTicketsList(); });
+      if (inboxLoaded) loadInbox();
     }
   });
 }

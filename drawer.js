@@ -364,6 +364,200 @@ function notifyMentions(ticketId, noteText) {
   send('notifyMentions', { ticket_id: ticketId, attendant_ids }).catch(() => {});
 }
 
+// Depois de uma ação (assumir/finalizar/transferir) recarrega qualquer
+// lista já carregada — não dá pra saber com certeza se o ticket foi aberto
+// pela aba Consultar ou pela Histórico, então atualiza as duas quando
+// aplicável (cada uma só recarrega de verdade se já tiver sido usada nesta
+// sessão do drawer).
+function refreshTicketLists() {
+  if (ticketsLoaded) loadOpenTickets();
+  if (historyCompanyId) loadHistory();
+}
+
+// ---- Ações do ticket (Assumir/Finalizar/Transferir) — mesmas do site
+// (TicketDetail.tsx), só que Finalizar/Transferir abrem um mini-formulário
+// inline em vez de um modal flutuante (o drawer é estreito demais pra um
+// modal de verdade). Preencher o formulário já funciona como confirmação,
+// igual ao site — não pede outra confirmação em cima.
+function buildTicketActions(t) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'margin-top:10px;';
+
+  const buttonsRow = document.createElement('div');
+  buttonsRow.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap;';
+  wrap.appendChild(buttonsRow);
+
+  const actionMsg = document.createElement('div');
+  actionMsg.className = 'validate-msg';
+  wrap.appendChild(actionMsg);
+  function showActionError(text) {
+    actionMsg.textContent = text;
+    actionMsg.className = 'validate-msg warn';
+  }
+
+  if (t.status !== 'assumido') {
+    const assumeBtn = document.createElement('button');
+    assumeBtn.type = 'button';
+    assumeBtn.className = 'btn-validate';
+    assumeBtn.style.cssText = 'width:auto; margin:0; flex:1; min-width:100px; background:rgba(239,68,68,.15); color:#f87171; border-color:rgba(239,68,68,.3);';
+    assumeBtn.textContent = '✅ Assumir';
+    assumeBtn.addEventListener('click', async () => {
+      assumeBtn.disabled = true;
+      const r = await send('updateTicket', { id: t.id, patch: { status: 'assumido', attendant_id: myAttendantId } });
+      assumeBtn.disabled = false;
+      if (r && r.ok) {
+        t.status = 'assumido';
+        t.attendant_id = myAttendantId;
+        refreshTicketLists();
+        showTicketDetail(t);
+      } else {
+        showActionError((r && r.error) || 'Não foi possível assumir o ticket.');
+      }
+    });
+    buttonsRow.appendChild(assumeBtn);
+  }
+
+  const finalizeBtn = document.createElement('button');
+  finalizeBtn.type = 'button';
+  finalizeBtn.className = 'btn-validate';
+  finalizeBtn.style.cssText = 'width:auto; margin:0; flex:1; min-width:100px; background:rgba(16,163,74,.15); color:#34d399; border-color:rgba(16,163,74,.3);';
+  finalizeBtn.textContent = '✔ Finalizar';
+  buttonsRow.appendChild(finalizeBtn);
+
+  const transferBtn = document.createElement('button');
+  transferBtn.type = 'button';
+  transferBtn.className = 'btn-validate';
+  transferBtn.style.cssText = 'width:auto; margin:0; flex:1; min-width:100px; background:rgba(14,165,233,.15); color:#38bdf8; border-color:rgba(14,165,233,.3);';
+  transferBtn.textContent = '⇄ Transferir';
+  buttonsRow.appendChild(transferBtn);
+
+  // ---- Finalizar: nota de solução obrigatória ----
+  const finalizeForm = document.createElement('div');
+  finalizeForm.style.cssText = 'display:none; flex-direction:column; gap:6px; margin-top:8px; padding:10px; border:1px solid var(--border); border-radius:9px; background:var(--card);';
+  const finalizeLabel = document.createElement('label');
+  finalizeLabel.className = 'label';
+  finalizeLabel.textContent = 'Descreva como o problema foi resolvido *';
+  const finalizeInput = document.createElement('textarea');
+  finalizeInput.style.cssText = 'min-height:60px;';
+  const finalizeActions = document.createElement('div');
+  finalizeActions.style.cssText = 'display:flex; gap:6px;';
+  const finalizeConfirm = document.createElement('button');
+  finalizeConfirm.type = 'button';
+  finalizeConfirm.className = 'btn primary';
+  finalizeConfirm.textContent = 'Confirmar';
+  const finalizeCancel = document.createElement('button');
+  finalizeCancel.type = 'button';
+  finalizeCancel.className = 'btn ghost';
+  finalizeCancel.textContent = 'Cancelar';
+  finalizeActions.appendChild(finalizeConfirm);
+  finalizeActions.appendChild(finalizeCancel);
+  finalizeForm.appendChild(finalizeLabel);
+  finalizeForm.appendChild(finalizeInput);
+  finalizeForm.appendChild(finalizeActions);
+  wrap.appendChild(finalizeForm);
+
+  // ---- Transferir: novo atendente + motivo obrigatório ----
+  const transferForm = document.createElement('div');
+  transferForm.style.cssText = 'display:none; flex-direction:column; gap:6px; margin-top:8px; padding:10px; border:1px solid var(--border); border-radius:9px; background:var(--card);';
+  const transferAttLabel = document.createElement('label');
+  transferAttLabel.className = 'label';
+  transferAttLabel.textContent = 'Transferir para *';
+  const transferSelect = document.createElement('select');
+  transferSelect.innerHTML = '<option value="">— Selecione —</option>';
+  for (const a of attendantsList) {
+    const opt = document.createElement('option');
+    opt.value = a.id;
+    opt.textContent = a.name;
+    transferSelect.appendChild(opt);
+  }
+  const transferReasonLabel = document.createElement('label');
+  transferReasonLabel.className = 'label';
+  transferReasonLabel.textContent = 'Motivo da transferência *';
+  const transferInput = document.createElement('textarea');
+  transferInput.style.cssText = 'min-height:50px;';
+  const transferActions = document.createElement('div');
+  transferActions.style.cssText = 'display:flex; gap:6px;';
+  const transferConfirm = document.createElement('button');
+  transferConfirm.type = 'button';
+  transferConfirm.className = 'btn primary';
+  transferConfirm.textContent = 'Confirmar';
+  const transferCancel = document.createElement('button');
+  transferCancel.type = 'button';
+  transferCancel.className = 'btn ghost';
+  transferCancel.textContent = 'Cancelar';
+  transferActions.appendChild(transferConfirm);
+  transferActions.appendChild(transferCancel);
+  transferForm.appendChild(transferAttLabel);
+  transferForm.appendChild(transferSelect);
+  transferForm.appendChild(transferReasonLabel);
+  transferForm.appendChild(transferInput);
+  transferForm.appendChild(transferActions);
+  wrap.appendChild(transferForm);
+
+  finalizeBtn.addEventListener('click', () => {
+    transferForm.style.display = 'none';
+    finalizeForm.style.display = finalizeForm.style.display === 'none' ? 'flex' : 'none';
+    actionMsg.textContent = '';
+  });
+  transferBtn.addEventListener('click', () => {
+    finalizeForm.style.display = 'none';
+    transferForm.style.display = transferForm.style.display === 'none' ? 'flex' : 'none';
+    actionMsg.textContent = '';
+  });
+  finalizeCancel.addEventListener('click', () => { finalizeForm.style.display = 'none'; finalizeInput.value = ''; });
+  transferCancel.addEventListener('click', () => { transferForm.style.display = 'none'; transferInput.value = ''; transferSelect.value = ''; });
+
+  finalizeConfirm.addEventListener('click', async () => {
+    const text = finalizeInput.value.trim();
+    if (!text) { showActionError('Descreva a solução antes de confirmar.'); return; }
+    finalizeConfirm.disabled = true;
+    await send('createTicketNote', {
+      ticket_id: t.id,
+      attendant_id: myAttendantId || null,
+      note: `[SOLUÇÃO DO PROBLEMA]: ${text}`,
+      is_internal: false,
+    });
+    notifyMentions(t.id, text);
+    const r = await send('updateTicket', { id: t.id, patch: { status: 'resolvido', closed_at: new Date().toISOString() } });
+    finalizeConfirm.disabled = false;
+    if (r && r.ok) {
+      t.status = 'resolvido';
+      t.closed_at = new Date().toISOString();
+      refreshTicketLists();
+      showTicketDetail(t);
+    } else {
+      showActionError((r && r.error) || 'Não foi possível finalizar o ticket.');
+    }
+  });
+
+  transferConfirm.addEventListener('click', async () => {
+    const targetId = transferSelect.value;
+    const text = transferInput.value.trim();
+    if (!targetId || !text) { showActionError('Selecione o atendente e explique o motivo antes de confirmar.'); return; }
+    const targetName = (attendantsList.find((a) => a.id === targetId) || {}).name || '—';
+    transferConfirm.disabled = true;
+    await send('createTicketNote', {
+      ticket_id: t.id,
+      attendant_id: myAttendantId || null,
+      note: `[TRANSFERÊNCIA para ${targetName}]: ${text}`,
+      is_internal: false,
+    });
+    notifyMentions(t.id, text);
+    const r = await send('updateTicket', { id: t.id, patch: { attendant_id: targetId } });
+    transferConfirm.disabled = false;
+    if (r && r.ok) {
+      t.attendant_id = targetId;
+      t.attendant = { id: targetId, name: targetName };
+      refreshTicketLists();
+      showTicketDetail(t);
+    } else {
+      showActionError((r && r.error) || 'Não foi possível transferir o ticket.');
+    }
+  });
+
+  return wrap;
+}
+
 // Visualização compacta e somente-leitura de 1 ticket: só dados, nenhuma
 // ação (nem editar, nem abrir link externo) — a única navegação daqui é o
 // botão "Voltar" (pra lista) ou o "Fechar" do drawer, no cabeçalho.
@@ -389,6 +583,15 @@ function showTicketDetail(t) {
   const badges = buildTicketBadges(t);
   badges.style.marginTop = '8px';
   content.appendChild(badges);
+
+  // ---- Ações (Assumir/Finalizar/Transferir) — mesmas 3 ações do site
+  // (TicketDetail.tsx), só aparecem se o ticket ainda não foi resolvido.
+  // Finalizar/Transferir abrem um mini-formulário inline (não um modal
+  // flutuante — o drawer é estreito demais pra isso) que já funciona como
+  // confirmação (precisa preencher motivo antes de aplicar), igual ao site.
+  if (!CLOSED_STATUSES.has(t.status)) {
+    content.appendChild(buildTicketActions(t));
+  }
 
   const fields = document.createElement('div');
   fields.style.marginTop = '10px';
@@ -452,6 +655,20 @@ function showTicketDetail(t) {
   notesList.style.marginTop = '8px';
   content.appendChild(notesList);
   loadTicketNotes(t.id, notesList);
+
+  // Adicionar nota só faz sentido pra ticket ainda ABERTO — um ticket
+  // resolvido/fechado no Histórico fica só leitura (dados + notas já
+  // existentes), sem caixa de nota nem ações (ver buildTicketActions acima).
+  if (CLOSED_STATUSES.has(t.status)) {
+    const closedMsg = document.createElement('p');
+    closedMsg.className = 'muted';
+    closedMsg.style.cssText = 'font-size:12px; margin-top:10px;';
+    closedMsg.textContent = 'Ticket resolvido/fechado — somente leitura.';
+    content.appendChild(closedMsg);
+    $('ticketsListView').style.display = 'none';
+    $('ticketDetailView').style.display = 'flex';
+    return;
+  }
 
   // Textarea + dropdown de @menção — mesmo mecanismo do site
   // (TicketDetail.tsx): "@parcial" logo antes do cursor, sem espaço no
@@ -1170,8 +1387,16 @@ $('historyFilterPending').addEventListener('click', () => setHistoryFilter('pend
 $('historyFilterResolved').addEventListener('click', () => setHistoryFilter('resolved'));
 
 function renderHistoryTicketRow(t) {
-  const row = document.createElement('div');
-  row.className = 'ticket-row ticket-row--static';
+  const row = document.createElement('button');
+  row.type = 'button';
+  row.className = 'ticket-row';
+  row.style.width = '100%';
+  row.style.font = 'inherit';
+  // O detalhe (dados/notas/ações) é compartilhado com a aba Consultar — abrir
+  // aqui troca pra ela, mesmo padrão de openTicketById (ver toast de
+  // comentário novo). Ticket resolvido/fechado abre igual, só que
+  // showTicketDetail já esconde nota/ações sozinho pra esse caso.
+  row.addEventListener('click', () => { setMode('consult'); showTicketDetail(t); });
 
   const top = document.createElement('div');
   top.className = 'ticket-row__top';

@@ -362,6 +362,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // Assumir/Finalizar/Transferir no detalhe do ticket do drawer (ver
+  // buildTicketActions em drawer.js) — mesma rota genérica de PATCH que o
+  // site usa.
+  if (request.action === "updateTicket") {
+    apiPatch(`/tickets/${request.id}`, request.patch).then(sendResponse);
+    return true;
+  }
+
   // Registra 1 "visita" ao suporte pra essa conversa do Crisp (ver
   // Navegador/tenant.js, maybeRecordSupportVisitForActiveConversation) — só
   // pra medir recorrência de contato por empresa, sem depender de ticket.

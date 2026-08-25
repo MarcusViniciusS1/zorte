@@ -711,6 +711,138 @@ function clearNoteDraft(ticketId) {
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushNoteDraft(); });
 window.addEventListener('pagehide', flushNoteDraft);
 
+// ============================================================
+// Imagens anexadas às notas
+// ============================================================
+// Mesma funcionalidade do sistema web (ver frontend/src/lib/attachments.ts):
+// o arquivo sobe pro Google Drive pelo backend e o Postgres guarda só o
+// metadado.
+//
+// Por que ESTAS chamadas vão direto no fetch, e não pelo background.js como
+// todo o resto do drawer: chrome.runtime.sendMessage serializa a mensagem em
+// JSON, e File/Blob não sobrevive a isso. Passar em base64 funcionaria mas
+// inflaria uma imagem de 25 MB pra ~33 MB de mensagem. O drawer é uma página
+// da extensão e tem host_permissions pro backend, então pode chamar direto —
+// só precisa anexar o token na mão, que é o que o background faria.
+const API_ORIGIN = 'http://192.168.0.104:3001'; // mesmo host do API_ROOT em background.js
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const THUMB_MAX_SIDE = 480;
+// Formatos que o backend aceita (ver ALLOWED_MIME em ticket-attachments.js).
+const ACCEPTED_IMAGE_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif', 'image/bmp'];
+
+function isAcceptedImage(file) {
+  return Boolean(file) && ACCEPTED_IMAGE_MIME.includes(file.type);
+}
+
+// O backend devolve caminho relativo ("/api/attachments/<id>/file?token=...")
+// porque não sabe por qual host o cliente chegou nele. Completa aqui.
+function attachmentUrl(relative) {
+  return `${API_ORIGIN}${relative}`;
+}
+
+async function attachmentFetch(path, init) {
+  const { zt_token } = await chrome.storage.local.get('zt_token');
+  const headers = { ...((init && init.headers) || {}), ...(zt_token ? { Authorization: `Bearer ${zt_token}` } : {}) };
+  const res = await fetch(`${API_ORIGIN}${path}`, { ...(init || {}), headers });
+  // Mesmo tratamento que send() dá pro 401 vindo do background: derruba pro
+  // login com aviso, em vez de um erro solto de upload.
+  if (res.status === 401) {
+    await chrome.storage.local.remove('zt_token');
+    handleUnauthorized();
+  }
+  return res;
+}
+
+async function listTicketAttachments(ticketId) {
+  try {
+    const res = await attachmentFetch(`/api/tickets/${ticketId}/attachments`);
+    const json = await res.json().catch(() => ({}));
+    return res.ok ? (json.data || []) : [];
+  } catch (e) {
+    return []; // anexo é complemento: sem rede, a nota continua aparecendo
+  }
+}
+
+// Miniatura feita aqui e não no servidor pelo mesmo motivo do sistema web:
+// gerar imagem no Node exigiria dependência nativa só pra isso, e o cliente
+// já tem canvas. Sem ela, uma nota com 5 prints baixaria dezenas de MB do
+// Drive toda vez que o ticket abrisse. Devolve null se o navegador não
+// decodificar o arquivo — aí a lista cai pro original, sem quebrar.
+async function makeThumbnail(file) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, THUMB_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    // Fundo branco: PNG com transparência viraria preto no JPEG.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    return await new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.72));
+  } catch (e) {
+    return null;
+  }
+}
+
+async function uploadTicketAttachment(ticketId, noteId, file) {
+  const params = new URLSearchParams({ filename: encodeURIComponent(file.name || 'imagem.png') });
+  if (noteId) params.set('note_id', noteId);
+
+  const res = await attachmentFetch(`/api/tickets/${ticketId}/attachments?${params}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type },
+    body: file,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Falha ao enviar a imagem.');
+
+  // Miniatura é otimização, não requisito: falhou, segue com o original salvo.
+  // A rota devolve a linha já atualizada porque o token do arquivo é assinado
+  // por variante — não dá pra montar a URL da miniatura aqui.
+  const thumb = await makeThumbnail(file);
+  if (thumb) {
+    try {
+      const tRes = await attachmentFetch(`/api/attachments/${json.data.id}/thumbnail`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'image/jpeg' },
+        body: thumb,
+      });
+      const tJson = await tRes.json().catch(() => null);
+      if (tRes.ok && tJson && tJson.data) return tJson.data;
+    } catch (e) { /* rede caiu na miniatura — o original já está salvo */ }
+  }
+  return json.data;
+}
+
+// Grade de miniaturas de uma nota. Clicar abre o original em outra aba: o
+// painel lateral é estreito demais pra servir de visualizador, e uma lightbox
+// dentro dele mostraria a imagem menor do que já está.
+function buildAttachmentGrid(items) {
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;';
+  for (const att of items) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.title = `${att.filename || 'imagem'} — abrir em nova guia`;
+    btn.style.cssText = 'padding:0; border:1px solid var(--border); border-radius:6px; overflow:hidden; background:var(--bg); cursor:pointer; line-height:0;';
+    const img = document.createElement('img');
+    img.src = attachmentUrl(att.thumbnail_url || att.url);
+    img.alt = att.filename || 'imagem anexada';
+    img.loading = 'lazy';
+    img.style.cssText = 'width:62px; height:62px; object-fit:cover; display:block;';
+    btn.appendChild(img);
+    btn.addEventListener('click', () => window.open(attachmentUrl(att.url), '_blank'));
+    grid.appendChild(btn);
+  }
+  return grid;
+}
+
 // Visualização de 1 ticket — dados + (se ainda aberto) notas e as ações
 // Assumir/Finalizar/Transferir (ver buildTicketActions). Compartilhada pelas
 // abas Consultar e Histórico, e pelo toast de comentário novo (tenant.js).
@@ -839,7 +971,7 @@ function showTicketDetail(t) {
   noteWrap.style.marginTop = '10px';
 
   const noteInput = document.createElement('textarea');
-  noteInput.placeholder = 'Adicionar nota... (use @ pra marcar um atendente)';
+  noteInput.placeholder = 'Adicionar nota... (use @ pra marcar um atendente, Ctrl+V pra colar print)';
   noteInput.style.cssText = 'min-height:60px;';
   noteWrap.appendChild(noteInput);
 
@@ -908,9 +1040,105 @@ function showTicketDetail(t) {
   });
   noteInput.addEventListener('blur', () => setTimeout(() => { mentionStart = null; renderMentionSuggestions(); }, 150));
 
+  // ---- Imagens da nota ----
+  // Ficam numa fila de "pendentes" e só sobem DEPOIS que a nota é salva: o
+  // backend amarra o anexo ao note_id, que só existe a partir daí. Enquanto
+  // isso a prévia sai de URL.createObjectURL, sem tocar na rede.
+  const pendingImages = []; // { file, previewUrl }
+
+  const noteImagesBar = document.createElement('div');
+  noteImagesBar.style.cssText = 'display:flex; align-items:center; gap:8px; margin-top:6px;';
+
+  const pickImagesInput = document.createElement('input');
+  pickImagesInput.type = 'file';
+  pickImagesInput.accept = ACCEPTED_IMAGE_MIME.join(',');
+  pickImagesInput.multiple = true;
+  pickImagesInput.style.display = 'none';
+
+  const pickImagesBtn = document.createElement('button');
+  pickImagesBtn.type = 'button';
+  pickImagesBtn.textContent = '📎 Anexar imagem';
+  pickImagesBtn.style.cssText = 'background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:4px 8px; font-size:11.5px; cursor:pointer;';
+  pickImagesBtn.addEventListener('click', () => pickImagesInput.click());
+
+  const imagesHint = document.createElement('span');
+  imagesHint.className = 'muted';
+  imagesHint.style.fontSize = '11px';
+
+  noteImagesBar.appendChild(pickImagesBtn);
+  noteImagesBar.appendChild(imagesHint);
+  noteImagesBar.appendChild(pickImagesInput);
+  content.appendChild(noteImagesBar);
+
+  const pendingStrip = document.createElement('div');
+  pendingStrip.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;';
+  content.appendChild(pendingStrip);
+
+  function renderPendingImages() {
+    pendingStrip.innerHTML = '';
+    imagesHint.textContent = pendingImages.length
+      ? `${pendingImages.length} imagem${pendingImages.length === 1 ? '' : 's'} vai junto com a nota`
+      : '';
+    pendingImages.forEach((p, index) => {
+      const box = document.createElement('div');
+      box.style.cssText = 'position:relative; line-height:0;';
+      const img = document.createElement('img');
+      img.src = p.previewUrl;
+      img.alt = p.file.name;
+      img.style.cssText = 'width:54px; height:54px; object-fit:cover; border:1px solid var(--border); border-radius:6px; display:block;';
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.textContent = '×';
+      rm.title = `Tirar "${p.file.name}"`;
+      rm.style.cssText = 'position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:12px; line-height:1; cursor:pointer; padding:0;';
+      rm.addEventListener('click', () => {
+        URL.revokeObjectURL(p.previewUrl); // senão a imagem fica presa na memória da aba
+        pendingImages.splice(index, 1);
+        renderPendingImages();
+      });
+      box.appendChild(img);
+      box.appendChild(rm);
+      pendingStrip.appendChild(box);
+    });
+  }
+
+  function addPendingImages(files) {
+    for (const file of files) {
+      if (!isAcceptedImage(file)) {
+        showNoteError(`"${file.name}" não é uma imagem aceita (PNG, JPG, WEBP, GIF, AVIF ou BMP).`);
+        continue;
+      }
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        showNoteError(`"${file.name}" passa de ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB.`);
+        continue;
+      }
+      pendingImages.push({ file, previewUrl: URL.createObjectURL(file) });
+    }
+    renderPendingImages();
+  }
+
+  pickImagesInput.addEventListener('change', () => {
+    addPendingImages([...pickImagesInput.files]);
+    pickImagesInput.value = ''; // permite escolher o MESMO arquivo de novo depois de tirar da fila
+  });
+
+  // Colar print direto na caixa de nota — é como o atendente trabalha no
+  // Crisp: recorta a tela e cola. Sem isto, teria que salvar em arquivo antes.
+  noteInput.addEventListener('paste', (e) => {
+    const files = [...((e.clipboardData && e.clipboardData.files) || [])];
+    if (!files.length) return;
+    e.preventDefault(); // senão o navegador ainda tenta colar o nome do arquivo como texto
+    addPendingImages(files);
+  });
+
   const noteMsg = document.createElement('div');
   noteMsg.className = 'validate-msg';
   content.appendChild(noteMsg);
+
+  function showNoteError(text) {
+    noteMsg.textContent = text;
+    noteMsg.className = 'validate-msg warn';
+  }
 
   const noteBtn = document.createElement('button');
   noteBtn.type = 'button';
@@ -919,8 +1147,10 @@ function showTicketDetail(t) {
   noteBtn.textContent = '+ Adicionar nota';
   noteBtn.addEventListener('click', async () => {
     const text = noteInput.value.trim();
-    if (!text) return;
+    // Só imagem, sem texto, também vale — é o caso de "manda o print do erro".
+    if (!text && !pendingImages.length) return;
     noteBtn.disabled = true;
+    pickImagesBtn.disabled = true;
     noteMsg.textContent = '';
     noteMsg.className = 'validate-msg';
     const r = await send('createTicketNote', {
@@ -929,16 +1159,39 @@ function showTicketDetail(t) {
       note: text,
       is_internal: true,
     });
-    noteBtn.disabled = false;
-    if (r && r.ok) {
-      noteInput.value = '';
-      clearNoteDraft(t.id); // nota salva — o rascunho não serve mais (senão voltava ao reabrir o ticket)
-      notifyMentions(t.id, text);
-      loadTicketNotes(t.id, notesList);
-    } else {
-      noteMsg.textContent = (r && r.error) || 'Não foi possível salvar a nota.';
-      noteMsg.className = 'validate-msg warn';
+    if (!r || !r.ok) {
+      noteBtn.disabled = false;
+      pickImagesBtn.disabled = false;
+      showNoteError((r && r.error) || 'Não foi possível salvar a nota.');
+      return;
     }
+
+    // Nota salva. As imagens sobem uma por vez, de propósito: são arquivos
+    // grandes indo pra API do Google, e em paralelo só engargalariam. Falha
+    // aqui é avisada mas não desfaz a nota — ela já está gravada.
+    const noteId = (r.data && (r.data.data ? r.data.data.id : r.data.id)) || null;
+    let falhas = 0;
+    for (const [index, p] of pendingImages.entries()) {
+      noteMsg.className = 'validate-msg';
+      noteMsg.textContent = `Enviando imagem ${index + 1} de ${pendingImages.length}...`;
+      try {
+        await uploadTicketAttachment(t.id, noteId, p.file);
+      } catch (err) {
+        falhas++;
+        showNoteError(`Falha ao enviar "${p.file.name}": ${err.message}`);
+      }
+      URL.revokeObjectURL(p.previewUrl);
+    }
+    pendingImages.length = 0;
+    renderPendingImages();
+    if (!falhas) noteMsg.textContent = '';
+
+    noteBtn.disabled = false;
+    pickImagesBtn.disabled = false;
+    noteInput.value = '';
+    clearNoteDraft(t.id); // nota salva — o rascunho não serve mais (senão voltava ao reabrir o ticket)
+    if (text) notifyMentions(t.id, text);
+    loadTicketNotes(t.id, notesList);
   });
   content.appendChild(noteBtn);
 
@@ -991,6 +1244,15 @@ async function loadTicketNotes(ticketId, container) {
     return;
   }
 
+  // Uma chamada só pros anexos do ticket inteiro, agrupados por nota aqui —
+  // pedir por nota daria N requisições pra desenhar a mesma lista.
+  const anexosPorNota = new Map();
+  for (const att of await listTicketAttachments(ticketId)) {
+    if (!att.note_id) continue; // anexo da DESCRIÇÃO do ticket, não de nota — o drawer não mostra esse bloco
+    if (!anexosPorNota.has(att.note_id)) anexosPorNota.set(att.note_id, []);
+    anexosPorNota.get(att.note_id).push(att);
+  }
+
   for (const n of notes) {
     const item = document.createElement('div');
     item.style.cssText = 'padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--card); margin-bottom:6px;';
@@ -1010,6 +1272,8 @@ async function loadTicketNotes(ticketId, container) {
 
     item.appendChild(head);
     item.appendChild(text);
+    const anexos = anexosPorNota.get(n.id);
+    if (anexos && anexos.length) item.appendChild(buildAttachmentGrid(anexos));
     container.appendChild(item);
   }
 }

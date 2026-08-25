@@ -245,9 +245,9 @@
            numa fila e só sobem depois que o ticket é criado (ver
            createPendingImages em drawer.js). -->
       <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
-        <button type="button" id="createPickImages" style="background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:4px 8px; font-size:11.5px; cursor:pointer;">📎 Anexar imagem</button>
+        <button type="button" id="createPickImages" style="background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:4px 8px; font-size:11.5px; cursor:pointer;">📎 Anexar arquivo</button>
         <span id="createImagesHint" class="muted" style="font-size:11px;"></span>
-        <input type="file" id="createImagesInput" multiple accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp" style="display:none" />
+        <input type="file" id="createImagesInput" multiple style="display:none" />
       </div>
       <div id="createImagesStrip" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
     </div>

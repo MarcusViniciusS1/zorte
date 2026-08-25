@@ -743,11 +743,26 @@ window.addEventListener('pagehide', flushNoteDraft);
 const API_ORIGIN = 'http://192.168.0.104:3001'; // mesmo host do API_ROOT em background.js
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const THUMB_MAX_SIDE = 480;
-// Formatos que o backend aceita (ver ALLOWED_MIME em ticket-attachments.js).
-const ACCEPTED_IMAGE_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif', 'image/bmp'];
+// Anexo aceita ARQUIVO EM GERAL (PDF, planilha, XML, log...), não só imagem.
+// A lista de imagem continua importando pra decidir o que ganha miniatura e o
+// que aparece como prévia; o resto vira cartão com o nome do arquivo.
+const IMAGE_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif', 'image/bmp'];
 
-function isAcceptedImage(file) {
-  return Boolean(file) && ACCEPTED_IMAGE_MIME.includes(file.type);
+// Extensões que o backend recusa (ver BLOCKED_EXT em ticket-attachments.js).
+// Aqui é só pra avisar antes de gastar a subida — a recusa que vale é lá.
+const BLOCKED_EXT = [
+  'exe', 'msi', 'bat', 'cmd', 'com', 'cpl', 'scr', 'pif', 'jar', 'app',
+  'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'ps1', 'psm1', 'sh',
+  'dll', 'sys', 'lnk', 'reg', 'hta', 'msc',
+];
+
+function isImageMime(mime) {
+  return IMAGE_MIME.includes(String(mime || '').toLowerCase());
+}
+
+function isBlockedFile(file) {
+  const m = /\.([a-z0-9]{1,8})$/i.exec((file && file.name) || '');
+  return Boolean(m) && BLOCKED_EXT.includes(m[1].toLowerCase());
 }
 
 // O backend devolve caminho relativo ("/api/attachments/<id>/file?token=...")
@@ -818,6 +833,10 @@ async function uploadTicketAttachment(ticketId, noteId, file) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || 'Falha ao enviar a imagem.');
 
+  // Miniatura só faz sentido pra imagem: PDF/planilha/zip não têm o que
+  // reduzir no canvas, e a grade mostra cartão com o nome pra esses.
+  if (!isImageMime(file.type)) return json.data;
+
   // Miniatura é otimização, não requisito: falhou, segue com o original salvo.
   // A rota devolve a linha já atualizada porque o token do arquivo é assinado
   // por variante — não dá pra montar a URL da miniatura aqui.
@@ -836,23 +855,41 @@ async function uploadTicketAttachment(ticketId, noteId, file) {
   return json.data;
 }
 
-// Grade de miniaturas de uma nota. Clicar abre o original em outra aba: o
-// painel lateral é estreito demais pra servir de visualizador, e uma lightbox
-// dentro dele mostraria a imagem menor do que já está.
+// Grade de anexos de uma nota. Clicar abre em outra aba: o painel lateral é
+// estreito demais pra servir de visualizador, e uma lightbox dentro dele
+// mostraria a imagem menor do que já está. Arquivo que não é imagem vira
+// cartão com o nome — não tem miniatura, e a rota serve ele como download
+// (ver Content-Disposition em backend/index.js).
 function buildAttachmentGrid(items) {
   const grid = document.createElement('div');
   grid.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;';
   for (const att of items) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.title = `${att.filename || 'imagem'} — abrir em nova guia`;
+    const nome = att.original_filename || att.filename || 'arquivo';
     btn.style.cssText = 'padding:0; border:1px solid var(--border); border-radius:6px; overflow:hidden; background:var(--bg); cursor:pointer; line-height:0;';
-    const img = document.createElement('img');
-    img.src = attachmentUrl(att.thumbnail_url || att.url);
-    img.alt = att.filename || 'imagem anexada';
-    img.loading = 'lazy';
-    img.style.cssText = 'width:62px; height:62px; object-fit:cover; display:block;';
-    btn.appendChild(img);
+    if (isImageMime(att.mime)) {
+      btn.title = `${nome} — abrir em nova guia`;
+      const img = document.createElement('img');
+      img.src = attachmentUrl(att.thumbnail_url || att.url);
+      img.alt = nome;
+      img.loading = 'lazy';
+      img.style.cssText = 'width:62px; height:62px; object-fit:cover; display:block;';
+      btn.appendChild(img);
+    } else {
+      btn.title = `${nome} — baixar`;
+      const card = document.createElement('span');
+      card.style.cssText = 'display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; width:62px; height:62px; padding:4px; box-sizing:border-box; line-height:1.15;';
+      const icon = document.createElement('span');
+      icon.textContent = '📄';
+      icon.style.cssText = 'font-size:16px;';
+      const label = document.createElement('span');
+      label.textContent = nome;
+      label.style.cssText = 'font-size:8.5px; color:var(--muted); word-break:break-all; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;';
+      card.appendChild(icon);
+      card.appendChild(label);
+      btn.appendChild(card);
+    }
     btn.addEventListener('click', () => window.open(attachmentUrl(att.url), '_blank'));
     grid.appendChild(btn);
   }
@@ -987,7 +1024,7 @@ function showTicketDetail(t) {
   noteWrap.style.marginTop = '10px';
 
   const noteInput = document.createElement('textarea');
-  noteInput.placeholder = 'Adicionar nota... (use @ pra marcar um atendente, Ctrl+V pra colar print)';
+  noteInput.placeholder = 'Adicionar nota... (use @ pra marcar um atendente, Ctrl+V pra colar print ou arquivo)';
   noteInput.style.cssText = 'min-height:60px;';
   noteWrap.appendChild(noteInput);
 
@@ -1067,13 +1104,12 @@ function showTicketDetail(t) {
 
   const pickImagesInput = document.createElement('input');
   pickImagesInput.type = 'file';
-  pickImagesInput.accept = ACCEPTED_IMAGE_MIME.join(',');
   pickImagesInput.multiple = true;
   pickImagesInput.style.display = 'none';
 
   const pickImagesBtn = document.createElement('button');
   pickImagesBtn.type = 'button';
-  pickImagesBtn.textContent = '📎 Anexar imagem';
+  pickImagesBtn.textContent = '📎 Anexar arquivo';
   pickImagesBtn.style.cssText = 'background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:4px 8px; font-size:11.5px; cursor:pointer;';
   pickImagesBtn.addEventListener('click', () => pickImagesInput.click());
 
@@ -1093,15 +1129,27 @@ function showTicketDetail(t) {
   function renderPendingImages() {
     pendingStrip.innerHTML = '';
     imagesHint.textContent = pendingImages.length
-      ? `${pendingImages.length} imagem${pendingImages.length === 1 ? '' : 's'} vai junto com a nota`
+      ? `${pendingImages.length} arquivo${pendingImages.length === 1 ? '' : 's'} vai junto com a nota`
       : '';
     pendingImages.forEach((p, index) => {
       const box = document.createElement('div');
       box.style.cssText = 'position:relative; line-height:0;';
-      const img = document.createElement('img');
-      img.src = p.previewUrl;
-      img.alt = p.file.name;
-      img.style.cssText = 'width:54px; height:54px; object-fit:cover; border:1px solid var(--border); border-radius:6px; display:block;';
+      // Só imagem tem prévia; arquivo geral vira cartão com o nome.
+      let img;
+      if (isImageMime(p.file.type)) {
+        img = document.createElement('img');
+        img.src = p.previewUrl;
+        img.alt = p.file.name;
+        img.style.cssText = 'width:54px; height:54px; object-fit:cover; border:1px solid var(--border); border-radius:6px; display:block;';
+      } else {
+        img = document.createElement('div');
+        img.title = p.file.name;
+        img.style.cssText = 'width:54px; height:54px; border:1px solid var(--border); border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:4px; box-sizing:border-box; line-height:1.15;';
+        const ic = document.createElement('span'); ic.textContent = '📄'; ic.style.fontSize = '15px';
+        const nm = document.createElement('span'); nm.textContent = p.file.name;
+        nm.style.cssText = 'font-size:8px; color:var(--muted); word-break:break-all; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;';
+        img.appendChild(ic); img.appendChild(nm);
+      }
       const rm = document.createElement('button');
       rm.type = 'button';
       rm.textContent = '×';
@@ -1120,8 +1168,8 @@ function showTicketDetail(t) {
 
   function addPendingImages(files) {
     for (const file of files) {
-      if (!isAcceptedImage(file)) {
-        showNoteError(`"${file.name}" não é uma imagem aceita (PNG, JPG, WEBP, GIF, AVIF ou BMP).`);
+      if (isBlockedFile(file)) {
+        showNoteError(`"${file.name}" não é aceito como anexo (executáveis e scripts).`);
         continue;
       }
       if (file.size > MAX_ATTACHMENT_BYTES) {
@@ -2199,15 +2247,27 @@ function renderCreatePendingImages() {
   const strip = $('createImagesStrip');
   strip.innerHTML = '';
   $('createImagesHint').textContent = createPendingImages.length
-    ? `${createPendingImages.length} imagem${createPendingImages.length === 1 ? '' : 's'} · não fica salva se o painel fechar`
+    ? `${createPendingImages.length} arquivo${createPendingImages.length === 1 ? '' : 's'} · não fica salvo se o painel fechar`
     : '';
   createPendingImages.forEach((p, index) => {
     const box = document.createElement('div');
     box.style.cssText = 'position:relative; line-height:0;';
-    const img = document.createElement('img');
-    img.src = p.previewUrl;
-    img.alt = p.file.name;
-    img.style.cssText = 'width:54px; height:54px; object-fit:cover; border:1px solid var(--border); border-radius:6px; display:block;';
+    // Só imagem tem prévia; arquivo geral vira cartão com o nome.
+    let img;
+    if (isImageMime(p.file.type)) {
+      img = document.createElement('img');
+      img.src = p.previewUrl;
+      img.alt = p.file.name;
+      img.style.cssText = 'width:54px; height:54px; object-fit:cover; border:1px solid var(--border); border-radius:6px; display:block;';
+    } else {
+      img = document.createElement('div');
+      img.title = p.file.name;
+      img.style.cssText = 'width:54px; height:54px; border:1px solid var(--border); border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:4px; box-sizing:border-box; line-height:1.15;';
+      const ic = document.createElement('span'); ic.textContent = '📄'; ic.style.fontSize = '15px';
+      const nm = document.createElement('span'); nm.textContent = p.file.name;
+      nm.style.cssText = 'font-size:8px; color:var(--muted); word-break:break-all; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;';
+      img.appendChild(ic); img.appendChild(nm);
+    }
     const rm = document.createElement('button');
     rm.type = 'button';
     rm.textContent = '×';
@@ -2226,8 +2286,8 @@ function renderCreatePendingImages() {
 
 function addCreatePendingImages(files) {
   for (const file of files) {
-    if (!isAcceptedImage(file)) {
-      showError(`"${file.name}" não é uma imagem aceita (PNG, JPG, WEBP, GIF, AVIF ou BMP).`);
+    if (isBlockedFile(file)) {
+      showError(`"${file.name}" não é aceito como anexo (executáveis e scripts).`);
       continue;
     }
     if (file.size > MAX_ATTACHMENT_BYTES) {

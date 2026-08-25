@@ -827,7 +827,11 @@ async function uploadTicketAttachment(ticketId, noteId, file) {
 
   const res = await attachmentFetch(`/api/tickets/${ticketId}/attachments?${params}`, {
     method: 'POST',
-    headers: { 'Content-Type': file.type },
+    // O fallback NÃO é cosmético: o navegador devolve file.type vazio pra
+    // extensão que ele não conhece (.cer, .p12, .xml em alguns sistemas), e
+    // um Content-Type VAZIO faz o express.raw do backend ignorar o corpo —
+    // o arquivo chegava como body vazio e voltava "Arquivo vazio".
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
     body: file,
   });
   const json = await res.json().catch(() => ({}));

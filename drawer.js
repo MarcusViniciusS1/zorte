@@ -578,6 +578,18 @@ function buildTicketActions(t) {
       return;
     }
 
+    // "Fechado" trava o ticket pra sempre (ver enforceTicketNotClosed em
+    // backend/index.js): não reabre nem aceita edição depois, de ninguém.
+    // Como este seletor salva na hora, sem etapa de "Salvar", uma escolha
+    // errada aqui seria definitiva num clique — daí a confirmação.
+    if (CLOSED_STATUSES.has(newStatus)) {
+      const ok = window.confirm(
+        'Marcar como "' + (STATUS_LABELS[newStatus] || newStatus) + '" finaliza o ticket.\n\n'
+        + 'Depois disso ele NÃO pode mais ser reaberto nem editado, nem por administrador.\n\nConfirma?'
+      );
+      if (!ok) { statusSelect.value = t.status; return; }
+    }
+
     // Qualquer outro status salva direto — mas se Finalizar/Transferir
     // estava aberto (o atendente mudou de ideia no meio do caminho), fecha
     // antes de disparar o PATCH. Sem isso, os dois formulários ficavam
@@ -603,6 +615,10 @@ function buildTicketActions(t) {
   finalizeConfirm.addEventListener('click', async () => {
     const text = finalizeInput.value.trim();
     if (!text) { showActionError('Descreva a solução antes de confirmar.'); return; }
+    // Finalizar passou a ser definitivo (ver enforceTicketNotClosed em
+    // backend/index.js). A nota de solução obrigatória já era uma barreira,
+    // mas ela não avisa que não tem volta.
+    if (!window.confirm('Finalizar encerra o ticket em definitivo.\n\nDepois disso ele NÃO pode mais ser reaberto nem editado, nem por administrador.\n\nConfirma?')) return;
     finalizeConfirm.disabled = true;
     await send('createTicketNote', {
       ticket_id: t.id,

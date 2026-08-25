@@ -2166,6 +2166,82 @@ function applyContext(r, { fillCompany }) {
   }
 }
 
+// ---- Imagens da descrição, no formulário de criar ticket ----
+// Aqui o ticket ainda não existe quando o atendente escolhe o arquivo, então
+// não dá pra subir na hora como o sistema web faz na tela do ticket: fica
+// numa fila e sobe depois do POST, com note_id nulo (= anexo da descrição,
+// não de nota).
+//
+// Estas NÃO entram no rascunho de chrome.storage.session junto com o resto do
+// formulário (ver snapshotFormState): a fila guarda objetos File, que não
+// sobrevivem à serialização, e em base64 estouraria a cota de 10 MB do
+// storage. Por isso o aviso embaixo da fila — fechar o painel perde as
+// imagens, mesmo com o texto do formulário voltando.
+const createPendingImages = []; // { file, previewUrl }
+
+function renderCreatePendingImages() {
+  const strip = $('createImagesStrip');
+  strip.innerHTML = '';
+  $('createImagesHint').textContent = createPendingImages.length
+    ? `${createPendingImages.length} imagem${createPendingImages.length === 1 ? '' : 's'} · não fica salva se o painel fechar`
+    : '';
+  createPendingImages.forEach((p, index) => {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:relative; line-height:0;';
+    const img = document.createElement('img');
+    img.src = p.previewUrl;
+    img.alt = p.file.name;
+    img.style.cssText = 'width:54px; height:54px; object-fit:cover; border:1px solid var(--border); border-radius:6px; display:block;';
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.textContent = '×';
+    rm.title = `Tirar "${p.file.name}"`;
+    rm.style.cssText = 'position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:12px; line-height:1; cursor:pointer; padding:0;';
+    rm.addEventListener('click', () => {
+      URL.revokeObjectURL(p.previewUrl);
+      createPendingImages.splice(index, 1);
+      renderCreatePendingImages();
+    });
+    box.appendChild(img);
+    box.appendChild(rm);
+    strip.appendChild(box);
+  });
+}
+
+function addCreatePendingImages(files) {
+  for (const file of files) {
+    if (!isAcceptedImage(file)) {
+      showError(`"${file.name}" não é uma imagem aceita (PNG, JPG, WEBP, GIF, AVIF ou BMP).`);
+      continue;
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      showError(`"${file.name}" passa de ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB.`);
+      continue;
+    }
+    createPendingImages.push({ file, previewUrl: URL.createObjectURL(file) });
+  }
+  renderCreatePendingImages();
+}
+
+function clearCreatePendingImages() {
+  for (const p of createPendingImages) URL.revokeObjectURL(p.previewUrl);
+  createPendingImages.length = 0;
+  renderCreatePendingImages();
+}
+
+$('createPickImages').addEventListener('click', () => $('createImagesInput').click());
+$('createImagesInput').addEventListener('change', () => {
+  addCreatePendingImages([...$('createImagesInput').files]);
+  $('createImagesInput').value = ''; // permite escolher o MESMO arquivo de novo depois de tirar da fila
+});
+// Colar print direto na descrição — mesmo fluxo da caixa de nota.
+$('description').addEventListener('paste', (e) => {
+  const files = [...((e.clipboardData && e.clipboardData.files) || [])];
+  if (!files.length) return;
+  e.preventDefault(); // senão o navegador ainda tenta colar o nome do arquivo como texto
+  addCreatePendingImages(files);
+});
+
 // Limpa o formulário de "Criar ticket" inteiro — chamado quando o atendente
 // troca de conversa no Crisp (ver notifyIfConversationChanged em tenant.js),
 // pra não deixar dado do cliente ANTERIOR (nome/telefone/e-mail/empresa)
@@ -2174,6 +2250,10 @@ function applyContext(r, { fillCompany }) {
 // seguro: esta função só é CHAMADA de fato depois que o script todo já
 // rodou (por um evento assíncrono), quando todas as declarações já existem.
 function resetCreateForm() {
+  // Imagens junto: o reset roda ao trocar de conversa no Crisp, e um print do
+  // cliente anterior anexado no ticket do próximo é vazamento de dado, não só
+  // desconforto visual. Mesma razão do resto dos campos serem limpos aqui.
+  clearCreatePendingImages();
   $('subject').value = '';
   $('name').value = '';
   $('phone').value = '';
@@ -2891,11 +2971,36 @@ $('form').addEventListener('submit', async (e) => {
   // Log de auditoria (não bloqueia o fluxo se falhar).
   send('createLog', { log: { action: 'create', entity: 'ticket', entity_id: created.id, details: { subject, sistema: ticket.sistema } } });
 
+  // Agora sim as imagens: o ticket existe e tem id. Uma por vez, de propósito
+  // — são arquivos grandes indo pra API do Google, em paralelo só
+  // engargalariam. Falha aqui NÃO desfaz o ticket, que já está criado; só
+  // avisa e segura o fechamento pra mensagem ser lida.
+  let falhasImagem = 0;
+  if (created.id && createPendingImages.length) {
+    btn.textContent = 'Enviando imagens...';
+    for (const [index, p] of createPendingImages.entries()) {
+      showSuccess(`Ticket criado. Enviando imagem ${index + 1} de ${createPendingImages.length}...`);
+      try {
+        await uploadTicketAttachment(created.id, null, p.file);
+      } catch (err) {
+        falhasImagem++;
+        showError(`Ticket criado, mas falhou ao enviar "${p.file.name}": ${err.message}`);
+      }
+    }
+  }
+  clearCreatePendingImages();
+
   // Ticket criado — o rascunho desta conversa não serve mais (senão a
   // próxima vez que abrir essa mesma conversa voltaria o formulário antigo).
   if (currentSessionKey) { try { chrome.storage.session.remove(currentSessionKey); } catch (e) {} }
 
-  showSuccess(`Ticket criado: "${subject}". Fechando...`);
   btn.textContent = 'Criado ✓';
+  if (falhasImagem) {
+    // Deixa o painel aberto: o atendente precisa ver quais imagens não
+    // subiram pra reanexar pelo sistema web.
+    btn.disabled = false;
+    return;
+  }
+  showSuccess(`Ticket criado: "${subject}". Fechando...`);
   setTimeout(() => dismiss('created', { subject }), 1200);
 });

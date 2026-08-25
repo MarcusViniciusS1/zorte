@@ -466,6 +466,11 @@
         <div id="historyCompanyList" class="combo-list" style="display:none"></div>
       </div>
     </div>
+    <!-- Aviso de tenant bloqueado (status sincronizado do zorte-banco) — só
+         aparece quando a empresa selecionada pertence a um tenant com
+         status 'blocked' (ver selectHistoryCompany em drawer.js). Reaproveita
+         a classe "error" já usada nos avisos de formulário, mesma cor. -->
+    <div id="historyBlockedNotice" class="error" style="display:none"></div>
     <div id="historyCompanyMsg" class="validate-msg"></div>
 
     <div id="historySummary" style="display:none; flex-direction:column; gap:10px;">

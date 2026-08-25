@@ -60,9 +60,28 @@ function send(action, extra) {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ action, ...extra }, (r) => {
       if (chrome.runtime.lastError) return resolve({ ok: false, error: chrome.runtime.lastError.message });
-      resolve(r || { ok: false, error: 'sem resposta' });
+      const result = r || { ok: false, error: 'sem resposta' };
+      // apiGet/apiPost/apiPatch (background.js) já limpam o token do storage
+      // num 401, mas isso sozinho não avisa ninguém — sem isto, qualquer ação
+      // (Assumir, Finalizar...) com token expirado (ex.: JWT_SECRET
+      // rotacionado no backend) só mostrava um erro genérico, sem pista de
+      // que era preciso logar de novo.
+      if (result.unauthorized) handleUnauthorized();
+      resolve(result);
     });
   });
+}
+
+let unauthorizedHandled = false;
+function handleUnauthorized() {
+  if (unauthorizedHandled) return; // já mostrado — evita repetir a cada chamada que falhar em seguida
+  unauthorizedHandled = true;
+  $('loginGate').style.display = 'flex';
+  $('appContent').style.display = 'none';
+  $('modeSwitch').style.display = 'none';
+  const err = $('loginError');
+  err.textContent = 'Sua sessão expirou. Faça login novamente.';
+  err.style.display = 'block';
 }
 
 // ---- Login (obrigatório) ----
@@ -398,6 +417,29 @@ function buildTicketActions(t) {
   const wrap = document.createElement('div');
   wrap.style.cssText = 'margin-top:10px;';
 
+  // Dropdown de Status igual ao do site (TicketDetail.tsx) — os botões
+  // Assumir/Finalizar/Transferir abaixo cobrem as transições guiadas mais
+  // comuns, mas não alcançam "Em Andamento"/"Aguardando"/"Fechado", que só
+  // tinham UI no site. Trocar aqui muda o status na hora (sem etapa de
+  // "Salvar" como no site, igual ao resto das ações deste drawer).
+  const statusRow = document.createElement('div');
+  statusRow.style.cssText = 'margin-bottom:10px;';
+  const statusLabel = document.createElement('label');
+  statusLabel.className = 'label';
+  statusLabel.textContent = 'Status';
+  statusRow.appendChild(statusLabel);
+  const statusSelect = document.createElement('select');
+  statusSelect.className = 'input';
+  for (const [value, text] of Object.entries(STATUS_LABELS)) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = text;
+    statusSelect.appendChild(opt);
+  }
+  statusSelect.value = t.status;
+  statusRow.appendChild(statusSelect);
+  wrap.appendChild(statusRow);
+
   const buttonsRow = document.createElement('div');
   buttonsRow.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap;';
   wrap.appendChild(buttonsRow);
@@ -521,6 +563,42 @@ function buildTicketActions(t) {
   });
   finalizeCancel.addEventListener('click', () => { finalizeForm.style.display = 'none'; finalizeInput.value = ''; });
   transferCancel.addEventListener('click', () => { transferForm.style.display = 'none'; transferInput.value = ''; transferSelect.value = ''; });
+
+  statusSelect.addEventListener('change', async () => {
+    const newStatus = statusSelect.value;
+    if (newStatus === t.status) return;
+
+    // "Resolvido" mantém a exigência de nota de solução — reaproveita o
+    // mesmo formulário do botão Finalizar em vez de salvar direto.
+    if (newStatus === 'resolvido') {
+      statusSelect.value = t.status;
+      transferForm.style.display = 'none';
+      finalizeForm.style.display = 'flex';
+      actionMsg.textContent = '';
+      return;
+    }
+
+    // Qualquer outro status salva direto — mas se Finalizar/Transferir
+    // estava aberto (o atendente mudou de ideia no meio do caminho), fecha
+    // antes de disparar o PATCH. Sem isso, os dois formulários ficavam
+    // habilitados ao mesmo tempo e dava pra confirmar os dois quase juntos,
+    // gerando dois PATCHs concorrentes disputando o mesmo ticket.
+    finalizeForm.style.display = 'none';
+    transferForm.style.display = 'none';
+    const patch = { status: newStatus };
+    if (newStatus === 'assumido') patch.attendant_id = myAttendantId;
+    statusSelect.disabled = true;
+    const r = await send('updateTicket', { id: t.id, patch });
+    statusSelect.disabled = false;
+    if (r && r.ok) {
+      Object.assign(t, patch);
+      refreshTicketLists();
+      showTicketDetail(t);
+    } else {
+      statusSelect.value = t.status;
+      showActionError((r && r.error) || 'Não foi possível mudar o status do ticket.');
+    }
+  });
 
   finalizeConfirm.addEventListener('click', async () => {
     const text = finalizeInput.value.trim();
@@ -1404,6 +1482,7 @@ function clearHistoryCompany() {
   $('historySummary').style.display = 'none';
   $('historyTicketsList').innerHTML = '';
   $('historyCompanyMsg').textContent = '';
+  $('historyBlockedNotice').style.display = 'none';
 }
 
 async function selectHistoryCompany(c) {
@@ -1414,6 +1493,15 @@ async function selectHistoryCompany(c) {
   $('historyCompanyChip').style.display = 'flex';
   $('historyCompany').style.display = 'none';
   $('historyCompanyList').style.display = 'none';
+  // Status do tenant (sincronizado do zorte-banco, ver backend/index.js
+  // /api/lookup/company) — avisa o atendente pra investigar o motivo do
+  // bloqueio antes de seguir com o atendimento.
+  if (c.tenant_status === 'blocked') {
+    $('historyBlockedNotice').textContent = 'Esse cliente está bloqueado. É necessário verificar se o bloqueio ocorreu por pendência financeira ou por encerramento do contrato.';
+    $('historyBlockedNotice').style.display = 'block';
+  } else {
+    $('historyBlockedNotice').style.display = 'none';
+  }
   await loadHistory();
 }
 

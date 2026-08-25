@@ -583,6 +583,11 @@ function findCompanyPanelAnchor(body) {
   return null;
 }
 
+// Endereço do sistema web — mesmo host usado pelo botão "Editar no sistema"
+// do drawer (ver WEB_APP_URL em drawer.js), duplicado aqui porque tenant.js
+// roda como content script separado, sem import entre os arquivos.
+const WEB_APP_URL = 'http://192.168.0.104:5173';
+
 // Desenha (ou redesenha, se a conversa mudou) o painel — sempre aparece
 // assim que a busca da empresa termina pra essa conversa, com placeholder
 // "Empresa não identificada" quando não achar nada (deixa claro que é "não
@@ -624,8 +629,31 @@ async function mountCompanyPanel() {
   title.style.cssText =
     'font-size:13px;font-weight:700;color:' + (match ? '#18181b' : '#a1a1aa') + ';flex:1;overflow:hidden;text-overflow:ellipsis;' +
     'white-space:nowrap;min-width:0;text-transform:uppercase;';
+  // Nome clicável leva pro cadastro da empresa no sistema web — só quando dá
+  // pra montar a URL (precisa do slug do tenant; empresa sem tenant vinculado
+  // não tem página própria).
+  if (match && match.tenant_slug) {
+    title.style.cursor = 'pointer';
+    title.title = 'Abrir cadastro da empresa no sistema';
+    title.addEventListener('click', () => {
+      window.open(`${WEB_APP_URL}/${encodeURIComponent(match.tenant_slug)}`, '_blank');
+    });
+  }
   header.appendChild(icon);
   header.appendChild(title);
+  // Status do tenant (sincronizado do zorte-banco, ver Tenant.status no
+  // frontend web) — só mostra o selo quando dá pra saber (empresa sem
+  // tenant vinculado não tem status nenhum).
+  if (match && match.tenant_status) {
+    const isBlocked = match.tenant_status === 'blocked';
+    const statusBadge = document.createElement('span');
+    statusBadge.textContent = isBlocked ? 'Bloqueado' : 'Ativo';
+    statusBadge.style.cssText =
+      'flex-shrink:0;padding:3px 8px;border-radius:999px;font:700 10px/1 -apple-system,Segoe UI,Roboto,sans-serif;' +
+      'letter-spacing:.03em;text-transform:uppercase;' +
+      (isBlocked ? 'background:#fee2e2;color:#dc2626;' : 'background:#dcfce7;color:#16a34a;');
+    header.appendChild(statusBadge);
+  }
   panel.appendChild(header);
 
   panel.appendChild(buildPanelField('CNPJ', match ? (match.document || '') : ''));
@@ -993,6 +1021,81 @@ function maybeRecordSupportVisitForActiveConversation() {
   chrome.runtime.sendMessage({ action: 'recordSupportVisit', sessionId, companyId }).catch(() => {});
 }
 
+// Um cliente pode voltar a falar com o suporte MAIS DE UMA VEZ no mesmo dia
+// pela MESMA conversa do Crisp (o atendente resolve, o cliente escreve de
+// novo depois) — o session_id não muda quando isso acontece, então a conta
+// acima (1 visita por session_id) nunca pegava esse recontato. Mesma ideia
+// do "Resumir com IA" (ver extractTodayMessagesFromDom): dentro do grupo
+// "Hoje", cada marcador "Conversa resolvida" (RESOLVED_EVENT_SELECTOR)
+// separa um atendimento do seguinte. O pedaço ANTES do 1º resolvido é a
+// visita de sempre (já contada acima); cada pedaço DEPOIS de um resolvido
+// que tiver pelo menos 1 mensagem do CLIENTE é uma visita extra. Devolve os
+// ÍNDICES (0-based) dos marcadores "resolvido" cujo pedaço seguinte
+// qualifica — o índice do marcador é estável ao longo do dia (a ordem dos
+// eventos já resolvidos não muda), por isso serve de identificador.
+function findTodayExtraVisitMarkerIndices() {
+  const groups = Array.from(document.querySelectorAll('.c-conversation-box-content__group'));
+  for (const group of groups) {
+    const dateLabel = (group.querySelector('.c-conversation-box-content__date')?.textContent || '')
+      .replace(/[\s ​‌‍﻿]+/g, ' ')
+      .trim();
+    if (!RE_TODAY_LABEL.test(dateLabel)) continue;
+
+    const resolvedMarkers = Array.from(group.querySelectorAll(RESOLVED_EVENT_SELECTOR));
+    if (!resolvedMarkers.length) return []; // sem "resolvido" no meio, é só a visita de sempre
+
+    const msgEls = Array.from(group.querySelectorAll('.c-conversation-box-content-message'));
+    const qualifying = [];
+    let markerIndex = 0;
+    let sawVisitorInSegment = false;
+
+    for (const el of msgEls) {
+      while (
+        markerIndex < resolvedMarkers.length &&
+        (resolvedMarkers[markerIndex].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)
+      ) {
+        // markerIndex > 0 exclui o pedaço ANTES do 1º resolvido (esse já é a
+        // visita de sempre, não é "extra").
+        if (markerIndex > 0 && sawVisitorInSegment) qualifying.push(markerIndex - 1);
+        sawVisitorInSegment = false;
+        markerIndex++;
+      }
+      if (markerIndex === 0) continue;
+      if (el.classList.contains('c-conversation-box-content-message--user')) sawVisitorInSegment = true;
+    }
+    // Último pedaço, depois do último "resolvido" cruzado — o loop acima só
+    // fecha um pedaço quando encontra o PRÓXIMO marcador, então o último
+    // fica pendente até aqui.
+    if (markerIndex > 0 && sawVisitorInSegment) qualifying.push(markerIndex - 1);
+
+    return qualifying;
+  }
+  return [];
+}
+
+// Já enviados nesta aba (reseta ao recarregar a página) — evita bater no
+// backend a cada 1.5s pro mesmo recontato só porque a conversa continua
+// aberta; o ON CONFLICT no backend (mesmo mecanismo do session_id normal)
+// já garante que nunca duplica de verdade, isso aqui é só pra não fazer
+// chamada desnecessária o tempo todo.
+const __ztExtraVisitsSent = new Set();
+function maybeRecordExtraVisitsForActiveConversation() {
+  const sessionId = extractSessionId();
+  if (!sessionId) return;
+  if (__ztLastCompanyMatch.sessionId !== sessionId) return;
+  const companyId = __ztLastCompanyMatch.data && __ztLastCompanyMatch.data.id;
+  if (!companyId) return;
+  for (const markerIndex of findTodayExtraVisitMarkerIndices()) {
+    // Chave sintética: mesmo session_id de sempre, só que marcando QUAL
+    // recontato do dia é esse — o backend trata como se fosse uma conversa
+    // própria (mesma coluna session_id, sem mudança de schema).
+    const key = `${sessionId}::resolved${markerIndex}`;
+    if (__ztExtraVisitsSent.has(key)) continue;
+    __ztExtraVisitsSent.add(key);
+    chrome.runtime.sendMessage({ action: 'recordSupportVisit', sessionId: key, companyId }).catch(() => {});
+  }
+}
+
 // Avisa o drawer sempre que o atendente troca de conversa no Crisp — sem
 // isso, o formulário de "Criar ticket" ficava com os dados do cliente
 // ANTERIOR (nome/telefone/e-mail/empresa antigos), podendo gerar um ticket
@@ -1108,6 +1211,7 @@ __ztInterval = setInterval(async () => {
   await maybeAutoFillEmailForActiveConversation();
   maybeAutoUpsertContactForActiveConversation();
   maybeRecordSupportVisitForActiveConversation();
+  maybeRecordExtraVisitsForActiveConversation();
   mountCompanyPanel();
   notifyIfConversationChanged();
 }, 1500);

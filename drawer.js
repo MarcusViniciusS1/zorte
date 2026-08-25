@@ -665,6 +665,52 @@ function showDetailPanel() {
   $('ticketDetailView').style.display = 'flex';
 }
 
+// ---- Rascunho da caixa de nota, por ticket ----
+// A caixa de nota é recriada do zero a cada showTicketDetail e o painel
+// lateral é DESTRUÍDO quando o atendente sai da aba do Crisp (ver
+// syncSidePanel em background.js — é de propósito, o painel só existe no
+// Crisp). Sem isso, escrever uma nota e trocar de aba/de ticket perdia tudo
+// que já tinha sido digitado. Mesma ideia do rascunho do formulário de
+// criação (ver saveDraftNow lá embaixo), só que a chave é o ticket, e
+// também em chrome.storage.session (some ao fechar o Chrome, basta
+// sobreviver ao ir-e-voltar).
+let pendingNoteDraft = null; // { key, text } ainda dentro do debounce
+let noteDraftTimer = null;
+
+function noteDraftKey(ticketId) {
+  return `zt_note_draft:${ticketId}`;
+}
+
+function flushNoteDraft() {
+  clearTimeout(noteDraftTimer);
+  if (!pendingNoteDraft) return;
+  const { key, text } = pendingNoteDraft;
+  pendingNoteDraft = null;
+  try {
+    if (text) chrome.storage.session.set({ [key]: text });
+    else chrome.storage.session.remove(key);
+  } catch (e) { /* storage.session indisponível (Chrome antigo) — segue sem rascunho */ }
+}
+
+function queueNoteDraft(ticketId, text) {
+  pendingNoteDraft = { key: noteDraftKey(ticketId), text };
+  clearTimeout(noteDraftTimer);
+  noteDraftTimer = setTimeout(flushNoteDraft, 400);
+}
+
+function clearNoteDraft(ticketId) {
+  const key = noteDraftKey(ticketId);
+  if (pendingNoteDraft && pendingNoteDraft.key === key) pendingNoteDraft = null;
+  clearTimeout(noteDraftTimer);
+  try { chrome.storage.session.remove(key); } catch (e) {}
+}
+
+// O painel fecha sem aviso ao trocar de aba — grava na hora o que ainda
+// estava esperando o debounce, senão os últimos caracteres digitados morrem
+// junto com a página.
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushNoteDraft(); });
+window.addEventListener('pagehide', flushNoteDraft);
+
 // Visualização de 1 ticket — dados + (se ainda aberto) notas e as ações
 // Assumir/Finalizar/Transferir (ver buildTicketActions). Compartilhada pelas
 // abas Consultar e Histórico, e pelo toast de comentário novo (tenant.js).
@@ -797,6 +843,13 @@ function showTicketDetail(t) {
   noteInput.style.cssText = 'min-height:60px;';
   noteWrap.appendChild(noteInput);
 
+  // Devolve o que tinha sido digitado antes do painel fechar/trocar de
+  // ticket. Assíncrono: se o atendente já começou a digitar enquanto o
+  // storage respondia, o que ele acabou de escrever ganha.
+  loadDraft(noteDraftKey(t.id)).then((saved) => {
+    if (saved && !noteInput.value) noteInput.value = saved;
+  });
+
   const mentionList = document.createElement('div');
   mentionList.className = 'combo-list';
   mentionList.style.display = 'none';
@@ -837,10 +890,12 @@ function showTicketDetail(t) {
     const cursor = before.length + inserted.length;
     noteInput.focus();
     noteInput.setSelectionRange(cursor, cursor);
+    queueNoteDraft(t.id, noteInput.value); // escolher a menção muda o texto sem disparar 'input'
   }
 
   noteInput.addEventListener('input', () => {
     const value = noteInput.value;
+    queueNoteDraft(t.id, value);
     const pos = noteInput.selectionStart;
     const uptoCursor = value.slice(0, pos);
     const atIndex = uptoCursor.lastIndexOf('@');
@@ -877,6 +932,7 @@ function showTicketDetail(t) {
     noteBtn.disabled = false;
     if (r && r.ok) {
       noteInput.value = '';
+      clearNoteDraft(t.id); // nota salva — o rascunho não serve mais (senão voltava ao reabrir o ticket)
       notifyMentions(t.id, text);
       loadTicketNotes(t.id, notesList);
     } else {
